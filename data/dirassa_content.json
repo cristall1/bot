@@ -1,0 +1,22 @@
+{
+  "dirassa": {
+    "levels": [],
+    "books": [],
+    "curriculum": [],
+    "pricing": [],
+    "general": []
+  },
+  "alazhar": {
+    "faculties": [],
+    "requirements": [],
+    "visa": [],
+    "documents": [],
+    "scholarships": [],
+    "contacts": [],
+    "general": []
+  },
+  "contacts": [],
+  "urls": [],
+  "total_messages": 0,
+  "note": "This file will be populated by parsing result.json"
+}
