@@ -8,85 +8,133 @@ from config import settings
 
 # Import all models to ensure they are registered with SQLAlchemy Base
 from models import (
-    User, Category, CategoryContent, InlineButton, ServiceRequest,
-    CourierManagement, UserPreference, AdminMessage, Broadcast,
-    AdminLog, SystemSetting
+    User, Document, DocumentButton, Delivery, Notification,
+    ShurtaAlert, UserMessage, Broadcast, TelegraphArticle,
+    Courier, SystemSetting, AdminLog
 )
 
 
 async def seed_initial_data():
-    """Seed initial categories and system settings"""
+    """Seed initial documents and system settings"""
     from database import AsyncSessionLocal
-    from services.category_service import CategoryService
-    from models import SystemSetting
-    import json
+    from models import Document, SystemSetting
+    from sqlalchemy import select
     
     async with AsyncSessionLocal() as session:
-        categories = await CategoryService.get_all_categories(session, active_only=False)
+        # Check if documents already exist
+        result = await session.execute(select(Document))
+        documents_exist = result.scalars().first()
         
-        if not categories:
-            logger.info("Seeding initial categories...")
+        if not documents_exist:
+            logger.info("Seeding initial documents...")
             try:
-                with open('data/categories_seed.json', 'r', encoding='utf-8') as f:
-                    categories_data = json.load(f)
+                initial_documents = [
+                    {
+                        "citizenship_scope": "UZ",
+                        "name_ru": "Получение рекомендации (Xitob)",
+                        "name_uz": "Xitob (tavsiyanoma) olish",
+                        "content_ru": "Полная информация о получении рекомендации для граждан Узбекистана...",
+                        "content_uz": "O'zbekiston fuqarolari uchun tavsiyanoma olish haqida to'liq ma'lumot...",
+                        "order_index": 1
+                    },
+                    {
+                        "citizenship_scope": "UZ",
+                        "name_ru": "Подача документов в Аль-Азхар",
+                        "name_uz": "Al-Azhar ga hujjat topshirish",
+                        "content_ru": "Инструкция по подаче документов для граждан Узбекистана...",
+                        "content_uz": "O'zbekiston fuqarolari uchun hujjat topshirish bo'yicha ko'rsatma...",
+                        "order_index": 2
+                    },
+                    {
+                        "citizenship_scope": "UZ",
+                        "name_ru": "Онлайн регистрация",
+                        "name_uz": "Onlayn ro'yxatdan o'tish",
+                        "content_ru": "Как пройти онлайн регистрацию для граждан Узбекистана...",
+                        "content_uz": "O'zbekiston fuqarolari uchun onlayn ro'yxatdan o'tish...",
+                        "order_index": 3
+                    },
+                    {
+                        "citizenship_scope": "RU",
+                        "name_ru": "Получение рекомендации (Xitob)",
+                        "name_uz": "Xitob (tavsiyanoma) olish",
+                        "content_ru": "Полная информация о получении рекомендации для граждан России...",
+                        "content_uz": "Rossiya fuqarolari uchun tavsiyanoma olish haqida to'liq ma'lumot...",
+                        "order_index": 1
+                    },
+                    {
+                        "citizenship_scope": "KZ",
+                        "name_ru": "Получение рекомендации (Xitob)",
+                        "name_uz": "Xitob (tavsiyanoma) olish",
+                        "content_ru": "Полная информация о получении рекомендации для граждан Казахстана...",
+                        "content_uz": "Qozog'iston fuqarolari uchun tavsiyanoma olish haqida to'liq ma'lumot...",
+                        "order_index": 1
+                    },
+                    {
+                        "citizenship_scope": "KG",
+                        "name_ru": "Получение рекомендации (Xitob)",
+                        "name_uz": "Xitob (tavsiyanoma) olish",
+                        "content_ru": "Полная информация о получении рекомендации для граждан Кыргызстана...",
+                        "content_uz": "Qirg'iziston fuqarolari uchun tavsiyanoma olish haqida to'liq ma'lumot...",
+                        "order_index": 1
+                    }
+                ]
                 
-                for cat_data in categories_data:
-                    category = await CategoryService.create_category(
-                        session,
-                        name_ru=cat_data['name_ru'],
-                        name_uz=cat_data['name_uz'],
-                        description_ru=cat_data.get('description_ru'),
-                        description_uz=cat_data.get('description_uz'),
-                        level=cat_data.get('level', 1),
-                        icon=cat_data.get('icon', '📁'),
-                        category_type=cat_data.get('category_type', 'GENERAL'),
-                        citizenship_scope=cat_data.get('citizenship_scope'),
-                        created_by_admin_id=cat_data.get('created_by_admin_id')
-                    )
-                    # Set order_index separately if provided
-                    if 'order_index' in cat_data:
-                        category.order_index = cat_data['order_index']
-                        await session.commit()
+                for doc_data in initial_documents:
+                    document = Document(**doc_data)
+                    session.add(document)
                 
-                logger.info("Initial categories seeded successfully")
+                await session.commit()
+                logger.info("Initial documents seeded successfully")
             except Exception as e:
-                logger.error(f"Error seeding categories: {e}")
+                logger.error(f"Error seeding documents: {e}")
         
-        from sqlalchemy import select
+        # Check if system settings exist
         result = await session.execute(select(SystemSetting))
-        settings_exist = result.scalar_one_or_none()
+        settings_exist = result.scalars().first()
         
         if not settings_exist:
             logger.info("Seeding system settings...")
             default_settings = [
                 {
-                    "setting_key": "SERVICE_TYPE_COURIER_ENABLED",
-                    "setting_name_ru": "Курьерские услуги включены",
-                    "setting_name_uz": "Kuryer xizmatlari yoqilgan",
+                    "setting_key": "DOCUMENTS_ENABLED",
+                    "setting_name_ru": "Раздел Документы включен",
+                    "setting_name_uz": "Hujjatlar bo'limi yoqilgan",
                     "value": True
                 },
                 {
-                    "setting_key": "SERVICE_TYPE_TUTORING_ENABLED",
-                    "setting_name_ru": "Репетиторство включено",
-                    "setting_name_uz": "Repetitorlik yoqilgan",
+                    "setting_key": "DELIVERY_ENABLED",
+                    "setting_name_ru": "Раздел Доставка включен",
+                    "setting_name_uz": "Dostavka bo'limi yoqilgan",
                     "value": True
                 },
                 {
-                    "setting_key": "ALLOW_NEW_REGISTRATION",
-                    "setting_name_ru": "Разрешить новые регистрации",
-                    "setting_name_uz": "Yangi ro'yxatdan o'tishga ruxsat",
+                    "setting_key": "NOTIFICATIONS_ENABLED",
+                    "setting_name_ru": "Раздел Уведомления включен",
+                    "setting_name_uz": "Xabarnoma bo'limi yoqilgan",
                     "value": True
                 },
                 {
-                    "setting_key": "TELEGRAPH_ENABLED",
-                    "setting_name_ru": "Telegraph интеграция",
-                    "setting_name_uz": "Telegraph integratsiya",
+                    "setting_key": "SHURTA_ENABLED",
+                    "setting_name_ru": "Раздел Полиция включен",
+                    "setting_name_uz": "Shurta bo'limi yoqilgan",
                     "value": True
                 },
                 {
-                    "setting_key": "AUTO_DELETE_EXPIRED_SERVICES",
-                    "setting_name_ru": "Автоудаление старых услуг",
-                    "setting_name_uz": "Eski xizmatlarni avtomatik o'chirish",
+                    "setting_key": "ALLOW_NEW_ORDERS",
+                    "setting_name_ru": "Разрешить новые заказы доставки",
+                    "setting_name_uz": "Yangi zakaz yaratishga ruxsat",
+                    "value": True
+                },
+                {
+                    "setting_key": "REQUIRE_COURIER_VERIFICATION",
+                    "setting_name_ru": "Требовать верификацию курьера",
+                    "setting_name_uz": "Kuryerni tekshirishni talab qilish",
+                    "value": False
+                },
+                {
+                    "setting_key": "AUTO_DELETE_OLD_NOTIFICATIONS",
+                    "setting_name_ru": "Автоудаление старых уведомлений (>30 дней)",
+                    "setting_name_uz": "Eski xabarlarni avtomatik o'chirish (>30 kun)",
                     "value": True
                 }
             ]

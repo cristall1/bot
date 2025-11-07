@@ -1,33 +1,69 @@
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery
+from aiogram import Dispatcher
+
 from database import AsyncSessionLocal
-from services.user_service import UserService
-from services.category_service import CategoryService
-from services.service_management import ServiceManagementService
-from services.courier_service import CourierService
-from services.inline_button_service import InlineButtonService
-from utils.keyboard_builder import KeyboardBuilder
-from utils.helpers import get_citizenship_name
 from locales import t
+from states import UserStates
+from services.user_service import UserService
+from services.document_service import DocumentService
+from services.delivery_service import DeliveryService
+from services.notification_service import NotificationService
+from services.shurta_service import ShurtaService
+from services.user_message_service import UserMessageService
 from utils.logger import logger
 
 router = Router()
 
 
-class UserStates(StatesGroup):
-    """FSM States for user bot"""
-    choosing_language = State()
-    choosing_citizenship = State()
-    browsing_categories = State()
-    requesting_service = State()
-    service_title = State()
-    service_description = State()
-    service_contact = State()
-    contacting_admin = State()
-    searching = State()
+def get_language_keyboard():
+    """Get language selection keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_RU"),
+            InlineKeyboardButton(text="🇺🇿 Oʻzbekcha", callback_data="lang_UZ")
+        ]
+    ])
+    return keyboard
+
+
+def get_main_menu_keyboard(lang: str):
+    """Get main menu keyboard"""
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=t("menu_documents", lang))],
+            [KeyboardButton(text=t("menu_delivery", lang))],
+            [KeyboardButton(text=t("menu_notifications", lang))],
+            [KeyboardButton(text=t("menu_shurta", lang))],
+            [KeyboardButton(text=t("menu_admin_contact", lang))],
+            [KeyboardButton(text=t("menu_settings", lang))]
+        ],
+        resize_keyboard=True
+    )
+    return keyboard
+
+
+def get_citizenship_keyboard(lang: str):
+    """Get citizenship selection keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t("citizenship_uz", lang), callback_data="cit_UZ")],
+        [InlineKeyboardButton(text=t("citizenship_ru", lang), callback_data="cit_RU")],
+        [InlineKeyboardButton(text=t("citizenship_kz", lang), callback_data="cit_KZ")],
+        [InlineKeyboardButton(text=t("citizenship_kg", lang), callback_data="cit_KG")],
+        [InlineKeyboardButton(text=t("back", lang), callback_data="back_main")]
+    ])
+    return keyboard
+
+
+def get_back_keyboard(lang: str):
+    """Get back button keyboard"""
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t("to_main_menu", lang))]],
+        resize_keyboard=True
+    )
+    return keyboard
 
 
 @router.message(Command("start"))
@@ -38,45 +74,25 @@ async def cmd_start(message: Message, state: FSMContext):
         
         if not user:
             await message.answer(
-                t("welcome", "RU") + "\n\n" + t("welcome_desc", "RU") + "\n\n" + t("welcome_capabilities", "RU"),
-                reply_markup=KeyboardBuilder.language_keyboard()
+                t("welcome", "RU"),
+                reply_markup=get_language_keyboard()
             )
-            await state.set_state(UserStates.choosing_language)
+            await state.set_state(UserStates.selecting_language)
         else:
             if user.is_banned:
-                await message.answer(t("user_banned", user.language))
+                await message.answer(t("banned", user.language))
                 return
-            
-            user.last_active = __import__('datetime').datetime.utcnow()
-            await session.commit()
             
             await message.answer(
                 t("main_menu", user.language),
-                reply_markup=KeyboardBuilder.main_menu_keyboard(user.language)
+                reply_markup=get_main_menu_keyboard(user.language)
             )
-            await state.clear()
 
 
 @router.callback_query(F.data.startswith("lang_"))
 async def process_language_selection(callback: CallbackQuery, state: FSMContext):
     """Process language selection"""
-    language = callback.data.split("_")[1]
-    await state.update_data(language=language)
-    
-    await callback.message.edit_text(
-        t("language_selected", language) + "\n\n" + t("choose_citizenship", language),
-        reply_markup=KeyboardBuilder.citizenship_keyboard(language)
-    )
-    await state.set_state(UserStates.choosing_citizenship)
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("citizenship_"))
-async def process_citizenship_selection(callback: CallbackQuery, state: FSMContext):
-    """Process citizenship selection"""
-    citizenship = callback.data.split("_")[1]
-    user_data = await state.get_data()
-    language = user_data.get("language", "RU")
+    lang = callback.data.split("_")[1]
     
     async with AsyncSessionLocal() as session:
         user = await UserService.create_or_update_user(
@@ -84,299 +100,847 @@ async def process_citizenship_selection(callback: CallbackQuery, state: FSMConte
             telegram_id=callback.from_user.id,
             username=callback.from_user.username,
             first_name=callback.from_user.first_name,
-            language=language,
-            citizenship=citizenship
-        )
-        
-        citizenship_name = get_citizenship_name(citizenship, language)
-        await callback.message.edit_text(
-            t("citizenship_selected", language, citizenship=citizenship_name) + "\n\n" +
-            t("registration_complete", language)
-        )
-        
-        await callback.message.answer(
-            t("main_menu", language),
-            reply_markup=KeyboardBuilder.main_menu_keyboard(language)
+            language=lang
         )
     
+    await callback.message.edit_text(t("language_selected", lang))
+    await callback.message.answer(
+        t("main_menu", lang),
+        reply_markup=get_main_menu_keyboard(lang)
+    )
     await state.clear()
     await callback.answer()
 
 
-@router.message(F.text.in_([t("menu_categories", "RU"), t("menu_categories", "UZ")]))
-async def show_categories(message: Message):
-    """Show root categories"""
+@router.message(F.text.in_([t("menu_documents", "RU"), t("menu_documents", "UZ")]))
+async def handle_documents(message: Message):
+    """Handle documents menu"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user or user.is_banned:
             return
         
-        categories = await CategoryService.get_root_categories(
-            session,
-            active_only=True,
-            citizenship=user.citizenship
-        )
-        
-        if not categories:
-            await message.answer(t("no_categories", user.language))
-            return
-        
-        buttons = []
-        for cat in categories:
-            name = cat.name_ru if user.language == "RU" else cat.name_uz
-            buttons.append({
-                "text": f"{cat.icon} {name}",
-                "callback_data": f"cat_{cat.id}"
-            })
-        
-        buttons.append({"text": t("btn_back", user.language), "callback_data": "main_menu"})
-        
         await message.answer(
-            t("select_category", user.language),
-            reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=2)
+            t("documents_title", user.language),
+            reply_markup=get_citizenship_keyboard(user.language)
         )
 
 
-@router.callback_query(F.data.startswith("cat_"))
-async def show_category_content(callback: CallbackQuery):
-    """Show category content and subcategories"""
-    category_id = int(callback.data.split("_")[1])
+@router.callback_query(F.data.startswith("cit_"))
+async def process_citizenship_selection(callback: CallbackQuery):
+    """Process citizenship selection for documents"""
+    citizenship = callback.data.split("_")[1]
     
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, callback.from_user.id)
-        if not user or user.is_banned:
+        if not user:
             return
         
-        category = await CategoryService.get_category(session, category_id)
-        if not category or not category.is_active:
-            await callback.answer(t("error", user.language))
-            return
+        documents = await DocumentService.get_documents_by_citizenship(session, citizenship)
         
-        name = category.name_ru if user.language == "RU" else category.name_uz
-        desc = category.description_ru if user.language == "RU" else category.description_uz
-        
-        text = f"{category.icon} **{name}**\n\n"
-        if desc:
-            text += f"{desc}\n\n"
-        
-        content = await CategoryService.get_category_content(session, category_id)
-        if content:
-            for item in content:
-                content_text = item.content_ru if user.language == "RU" else item.content_uz
-                if content_text:
-                    text += f"{content_text}\n\n"
-        
-        subcategories = await CategoryService.get_subcategories(
-            session,
-            category_id,
-            active_only=True,
-            citizenship=user.citizenship
-        )
-        
-        buttons = []
-        
-        if subcategories:
-            for subcat in subcategories:
-                subcat_name = subcat.name_ru if user.language == "RU" else subcat.name_uz
-                buttons.append({
-                    "text": f"{subcat.icon} {subcat_name}",
-                    "callback_data": f"cat_{subcat.id}"
-                })
-        
-        inline_buttons = await InlineButtonService.get_buttons_by_category(
-            session,
-            category_id,
-            active_only=True
-        )
-        
-        for btn in inline_buttons:
-            btn_text = btn.button_text_ru if user.language == "RU" else btn.button_text_uz
-            buttons.append({
-                "text": btn_text,
-                "url": btn.button_url
-            })
-        
-        buttons.append({"text": t("btn_back", user.language), "callback_data": f"cat_parent_{category.parent_id}" if category.parent_id else "categories"})
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=2),
-            parse_mode="Markdown"
-        )
+        if not documents:
+            await callback.message.edit_text(
+                t("no_documents", user.language),
+                reply_markup=get_citizenship_keyboard(user.language)
+            )
+        else:
+            buttons = []
+            for doc in documents:
+                title = doc.name_ru if user.language == "RU" else doc.name_uz
+                buttons.append([InlineKeyboardButton(
+                    text=title,
+                    callback_data=f"doc_{doc.id}"
+                )])
+            buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data="back_cit")])
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await callback.message.edit_text(
+                t("select_citizenship", user.language),
+                reply_markup=keyboard
+            )
     
     await callback.answer()
 
 
-@router.message(F.text.in_([t("menu_courier", "RU"), t("menu_courier", "UZ")]))
-async def show_courier_info(message: Message):
-    """Show courier system information"""
+@router.callback_query(F.data.startswith("doc_"))
+async def show_document(callback: CallbackQuery):
+    """Show document content"""
+    doc_id = int(callback.data.split("_")[1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        document = await DocumentService.get_document(session, doc_id)
+        if not document:
+            return
+        
+        content = document.content_ru if user.language == "RU" else document.content_uz
+        title = document.name_ru if user.language == "RU" else document.name_uz
+        
+        # Get buttons for this document
+        doc_buttons = await DocumentService.get_document_buttons(session, doc_id)
+        
+        keyboard_buttons = []
+        for btn in doc_buttons:
+            btn_text = btn.text_ru if user.language == "RU" else btn.text_uz
+            keyboard_buttons.append([InlineKeyboardButton(text=btn_text, url=btn.url)])
+        
+        keyboard_buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data=f"cit_{document.citizenship_scope}")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        # Send photo if available
+        if document.photo_url:
+            await callback.message.answer_photo(
+                photo=document.photo_url,
+                caption=f"{title}\n\n{content}",
+                reply_markup=keyboard
+            )
+        else:
+            await callback.message.answer(
+                f"{title}\n\n{content}",
+                reply_markup=keyboard
+            )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_cit")
+async def back_to_citizenship(callback: CallbackQuery):
+    """Back to citizenship selection"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.edit_text(
+            t("documents_title", user.language),
+            reply_markup=get_citizenship_keyboard(user.language)
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_main")
+async def back_to_main(callback: CallbackQuery):
+    """Back to main menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            t("main_menu", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
+        )
+    await callback.answer()
+
+
+@router.message(F.text.in_([t("menu_delivery", "RU"), t("menu_delivery", "UZ")]))
+async def handle_delivery(message: Message):
+    """Handle delivery menu"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user or user.is_banned:
             return
         
-        courier = await CourierService.get_courier(session, user.id)
-        
-        if courier and courier.is_courier:
-            text = t("already_courier", user.language) + "\n\n"
-            text += t("courier_rating", user.language, rating=courier.rating) + "\n"
-            text += t("courier_deliveries", user.language, count=courier.completed_deliveries) + "\n"
-            if courier.cairo_zone:
-                text += t("courier_zone", user.language, zone=courier.cairo_zone) + "\n"
-            text += t("courier_status", user.language, status=courier.courier_status)
-            
-            buttons = [
-                {"text": t("courier_active", user.language), "callback_data": "courier_deliveries"},
-                {"text": t("courier_stats", user.language), "callback_data": "courier_stats"}
-            ]
-        else:
-            text = t("courier_title", user.language) + "\n\n"
-            text += t("courier_desc", user.language) + "\n\n"
-            text += t("courier_benefits", user.language) + "\n\n"
-            text += t("courier_requirements", user.language) + "\n\n"
-            text += t("courier_zones", user.language)
-            
-            buttons = [
-                {"text": t("accept_courier_terms", user.language), "callback_data": "become_courier"}
-            ]
-        
-        buttons.append({"text": t("btn_back", user.language), "callback_data": "main_menu"})
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("delivery_menu_create", user.language), callback_data="delivery_create")],
+            [InlineKeyboardButton(text=t("delivery_menu_active", user.language), callback_data="delivery_active")],
+            [InlineKeyboardButton(text=t("delivery_menu_my_stats", user.language), callback_data="delivery_stats")],
+            [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+        ])
         
         await message.answer(
-            text,
-            reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=1)
+            t("delivery_title", user.language),
+            reply_markup=keyboard
         )
+
+
+@router.callback_query(F.data == "delivery_create")
+async def start_delivery_creation(callback: CallbackQuery, state: FSMContext):
+    """Start delivery creation"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            t("delivery_create_desc", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.delivery_description)
+    await callback.answer()
+
+
+@router.message(UserStates.delivery_description)
+async def process_delivery_description(message: Message, state: FSMContext):
+    """Process delivery description"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        if message.text == t("to_main_menu", user.language):
+            await state.clear()
+            await message.answer(
+                t("main_menu", user.language),
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            return
+        
+        await state.update_data(description=message.text)
+        await message.answer(t("delivery_create_location", user.language))
+        await state.set_state(UserStates.delivery_location)
+
+
+@router.message(UserStates.delivery_location)
+async def process_delivery_location(message: Message, state: FSMContext):
+    """Process delivery location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text)
+        await message.answer(t("delivery_create_phone", user.language))
+        await state.set_state(UserStates.delivery_phone)
+
+
+@router.message(UserStates.delivery_phone)
+async def process_delivery_phone(message: Message, state: FSMContext):
+    """Process delivery phone and create order"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        data = await state.get_data()
+        
+        # Create delivery
+        delivery = await DeliveryService.create_delivery(
+            session,
+            creator_id=user.id,
+            description=data["description"],
+            location_info=data["location"],
+            phone=message.text
+        )
+        
+        # Notify all active couriers
+        couriers = await DeliveryService.get_all_couriers(session)
+        for courier in couriers:
+            courier_user = await UserService.get_user_by_id(session, courier.user_id)
+            if courier_user and courier_user.notifications_enabled:
+                try:
+                    # Get bot instance to send message
+                    from bots.user_bot import UserBot
+                    bot = message.bot
+                    
+                    alert_text = t("delivery_alert_new", courier_user.language,
+                                 description=data["description"],
+                                 location=data["location"],
+                                 phone=message.text)
+                    
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text=t("delivery_take", courier_user.language), callback_data=f"take_delivery_{delivery.id}")],
+                        [InlineKeyboardButton(text=t("delivery_reject", courier_user.language), callback_data=f"reject_delivery_{delivery.id}")]
+                    ])
+                    
+                    await bot.send_message(
+                        courier_user.telegram_id,
+                        alert_text,
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify courier {courier_user.telegram_id}: {e}")
+        
+        await message.answer(
+            t("delivery_created", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
+        )
+        await state.clear()
+
+
+@router.callback_query(F.data.startswith("take_delivery_"))
+async def take_delivery(callback: CallbackQuery):
+    """Courier takes delivery"""
+    delivery_id = int(callback.data.split("_")[2])
+    
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        # Assign delivery
+        delivery = await DeliveryService.assign_courier(session, delivery_id, user.id)
+        
+        if not delivery:
+            await callback.answer(t("delivery_already_taken", user.language), show_alert=True)
+            return
+        
+        # Notify creator
+        creator = await UserService.get_user_by_id(session, delivery.creator_id)
+        if creator:
+            try:
+                await callback.bot.send_message(
+                    creator.telegram_id,
+                    t("delivery_accepted", creator.language)
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify creator: {e}")
+        
+        await callback.message.edit_text(t("delivery_taken", user.language))
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("reject_delivery_"))
+async def reject_delivery(callback: CallbackQuery):
+    """Courier rejects delivery"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.edit_text(t("delivery_rejected", user.language))
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "delivery_stats")
+async def show_delivery_stats(callback: CallbackQuery):
+    """Show courier statistics"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        if not user.is_courier:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=t("delivery_become_courier", user.language), callback_data="become_courier")]
+            ])
+            await callback.message.answer(
+                t("delivery_stats_not_courier", user.language),
+                reply_markup=keyboard
+            )
+        else:
+            stats = await DeliveryService.get_courier_stats(session, user.id)
+            if stats:
+                text = f"{t('delivery_stats_title', user.language)}\n\n"
+                text += t("delivery_stats_completed", user.language, count=stats["completed_deliveries"]) + "\n"
+                text += t("delivery_stats_rating", user.language, rating=stats["rating"])
+                
+                await callback.message.answer(text)
+    
+    await callback.answer()
 
 
 @router.callback_query(F.data == "become_courier")
-async def register_as_courier(callback: CallbackQuery):
-    """Register user as courier"""
+async def become_courier(callback: CallbackQuery):
+    """User becomes courier"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, callback.from_user.id)
-        if not user or user.is_banned:
+        if not user:
             return
         
-        await CourierService.register_courier(session, user.id)
-        
-        await callback.message.edit_text(
-            t("courier_registered", user.language),
-            reply_markup=KeyboardBuilder.back_button(user.language, "main_menu")
-        )
+        await DeliveryService.make_courier(session, user.id)
+        await callback.message.answer(t("delivery_courier_registered", user.language))
     
     await callback.answer()
 
 
-@router.message(F.text.in_([t("menu_services", "RU"), t("menu_services", "UZ")]))
-async def show_services(message: Message):
-    """Show available services"""
+@router.message(F.text.in_([t("menu_admin_contact", "RU"), t("menu_admin_contact", "UZ")]))
+async def handle_admin_contact(message: Message, state: FSMContext):
+    """Handle admin contact"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user or user.is_banned:
             return
         
-        services = await ServiceManagementService.get_approved_services(session)
-        
-        if not services:
-            await message.answer(t("no_services", user.language))
+        await message.answer(
+            t("admin_contact_prompt", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.admin_contact_message)
+
+
+@router.message(UserStates.admin_contact_message)
+async def process_admin_message(message: Message, state: FSMContext):
+    """Process message to admin"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
             return
         
-        text = t("services_list", user.language) + "\n\n"
+        if message.text == t("to_main_menu", user.language):
+            await state.clear()
+            await message.answer(
+                t("main_menu", user.language),
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            return
         
-        for service in services[:10]:
-            title = service.title_ru if user.language == "RU" else service.title_uz
-            desc = service.description_ru if user.language == "RU" else service.description_uz
-            text += f"🏢 **{title}**\n{desc[:100]}...\n\n"
-        
-        buttons = [
-            {"text": t("service_request", user.language), "callback_data": "request_service"},
-            {"text": t("my_services", user.language), "callback_data": "my_services"}
-        ]
-        
+        await UserMessageService.create_message(session, user.id, message.text)
         await message.answer(
-            text,
-            reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=2),
-            parse_mode="Markdown"
+            t("admin_contact_sent", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
         )
+        await state.clear()
 
 
 @router.message(F.text.in_([t("menu_settings", "RU"), t("menu_settings", "UZ")]))
-async def show_settings(message: Message):
-    """Show user settings"""
+async def handle_settings(message: Message):
+    """Handle settings menu"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user or user.is_banned:
             return
         
-        text = t("settings", user.language) + "\n\n"
-        text += t("settings_language", user.language) + f" {user.language}\n"
-        text += t("settings_citizenship", user.language) + f" {get_citizenship_name(user.citizenship, user.language)}\n"
-        notif_status = t("notifications_enabled", user.language) if user.notifications_enabled else t("notifications_disabled", user.language)
-        text += t("settings_notifications", user.language) + f" {notif_status}\n"
+        notif_status = t("settings_notifications_on", user.language) if user.notifications_enabled else t("settings_notifications_off", user.language)
         
-        buttons = [
-            {"text": t("change_language", user.language), "callback_data": "change_language"},
-            {"text": t("toggle_notifications", user.language), "callback_data": "toggle_notifications"}
-        ]
+        text = f"{t('settings_title', user.language)}\n\n"
+        text += f"{t('settings_language', user.language)}: {'Русский' if user.language == 'RU' else 'Oʻzbekcha'}\n"
+        text += f"{t('settings_notifications', user.language)}: {notif_status}"
         
-        await message.answer(
-            text,
-            reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=2)
-        )
-
-
-@router.callback_query(F.data == "toggle_notifications")
-async def toggle_notifications(callback: CallbackQuery):
-    """Toggle user notifications"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.toggle_notifications(session, callback.from_user.id)
-        if user:
-            await callback.answer(t("settings_updated", user.language))
-            
-            text = t("settings", user.language) + "\n\n"
-            text += t("settings_language", user.language) + f" {user.language}\n"
-            text += t("settings_citizenship", user.language) + f" {get_citizenship_name(user.citizenship, user.language)}\n"
-            notif_status = t("notifications_enabled", user.language) if user.notifications_enabled else t("notifications_disabled", user.language)
-            text += t("settings_notifications", user.language) + f" {notif_status}\n"
-            
-            buttons = [
-                {"text": t("change_language", user.language), "callback_data": "change_language"},
-                {"text": t("toggle_notifications", user.language), "callback_data": "toggle_notifications"}
-            ]
-            
-            await callback.message.edit_text(
-                text,
-                reply_markup=KeyboardBuilder.inline_keyboard(buttons, row_width=2)
-            )
-
-
-@router.message(F.text.in_([t("menu_help", "RU"), t("menu_help", "UZ")]))
-async def show_help(message: Message):
-    """Show help information"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, message.from_user.id)
-        if not user or user.is_banned:
-            return
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("settings_change_language", user.language), callback_data="settings_lang")],
+            [InlineKeyboardButton(text=t("settings_toggle_notifications", user.language), callback_data="settings_notif")],
+            [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+        ])
         
-        await message.answer(
-            t("help_text", user.language),
-            parse_mode="Markdown"
-        )
+        await message.answer(text, reply_markup=keyboard)
 
 
-@router.callback_query(F.data == "main_menu")
-async def back_to_main_menu(callback: CallbackQuery):
-    """Return to main menu"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, callback.from_user.id)
-        if user:
-            await callback.message.answer(
-                t("main_menu", user.language),
-                reply_markup=KeyboardBuilder.main_menu_keyboard(user.language)
-            )
+@router.callback_query(F.data == "settings_lang")
+async def change_language(callback: CallbackQuery):
+    """Change language setting"""
+    await callback.message.answer(
+        t("choose_language", "RU"),
+        reply_markup=get_language_keyboard()
+    )
     await callback.answer()
 
 
-def register_user_handlers(dp):
+@router.callback_query(F.data == "settings_notif")
+async def toggle_notifications(callback: CallbackQuery):
+    """Toggle notifications"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.toggle_notifications(session, callback.from_user.id)
+        if not user:
+            return
+        
+        if user.notifications_enabled:
+            await callback.message.answer(t("settings_notifications_enabled", user.language))
+        else:
+            await callback.message.answer(t("settings_notifications_disabled", user.language))
+    
+    await callback.answer()
+
+
+@router.message(F.text.in_([t("menu_notifications", "RU"), t("menu_notifications", "UZ")]))
+async def handle_notifications(message: Message):
+    """Handle notifications menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user or user.is_banned:
+            return
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("notifications_menu_lost_person", user.language), callback_data="notif_person")],
+            [InlineKeyboardButton(text=t("notifications_menu_lost_item", user.language), callback_data="notif_item")],
+            [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+        ])
+        
+        await message.answer(
+            t("notifications_title", user.language),
+            reply_markup=keyboard
+        )
+
+
+@router.callback_query(F.data == "notif_person")
+async def start_lost_person(callback: CallbackQuery, state: FSMContext):
+    """Start lost person notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            t("notifications_lost_person_name", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_person_name)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_person_name)
+async def process_lost_person_name(message: Message, state: FSMContext):
+    """Process lost person name"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(name=message.text)
+        await message.answer(t("notifications_lost_person_desc", user.language))
+        await state.set_state(UserStates.notification_person_desc)
+
+
+@router.message(UserStates.notification_person_desc)
+async def process_lost_person_desc(message: Message, state: FSMContext):
+    """Process lost person description"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(description=message.text)
+        
+        skip_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
+            resize_keyboard=True
+        )
+        await message.answer(t("notifications_lost_person_photo", user.language), reply_markup=skip_keyboard)
+        await state.set_state(UserStates.notification_person_photo)
+
+
+@router.message(UserStates.notification_person_photo)
+async def process_lost_person_photo(message: Message, state: FSMContext):
+    """Process lost person photo"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        photo_url = None
+        if message.photo:
+            photo_url = message.photo[-1].file_id
+        
+        await state.update_data(photo_url=photo_url)
+        await message.answer(t("notifications_lost_person_location", user.language))
+        await state.set_state(UserStates.notification_person_location)
+
+
+@router.message(UserStates.notification_person_location)
+async def process_lost_person_location(message: Message, state: FSMContext):
+    """Process lost person location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text)
+        await message.answer(t("notifications_lost_person_phone", user.language))
+        await state.set_state(UserStates.notification_person_phone)
+
+
+@router.message(UserStates.notification_person_phone)
+async def process_lost_person_phone(message: Message, state: FSMContext):
+    """Process lost person phone and create notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        data = await state.get_data()
+        
+        # Create notification
+        notification = await NotificationService.create_notification(
+            session,
+            notification_type="PROPAJA_ODAM",
+            creator_id=user.id,
+            title=data["name"],
+            description=data["description"],
+            location=data["location"],
+            phone=message.text,
+            photo_url=data.get("photo_url")
+        )
+        
+        # Notify all users
+        all_users = await UserService.get_all_users(session)
+        for target_user in all_users:
+            if target_user.notifications_enabled and target_user.id != user.id:
+                try:
+                    alert_text = t("notifications_alert_person", target_user.language,
+                                 name=data["name"],
+                                 description=data["description"],
+                                 location=data["location"],
+                                 phone=message.text)
+                    
+                    if data.get("photo_url"):
+                        await message.bot.send_photo(
+                            target_user.telegram_id,
+                            photo=data["photo_url"],
+                            caption=alert_text
+                        )
+                    else:
+                        await message.bot.send_message(
+                            target_user.telegram_id,
+                            alert_text
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
+        
+        await message.answer(
+            t("notifications_created", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
+        )
+        await state.clear()
+
+
+@router.callback_query(F.data == "notif_item")
+async def start_lost_item(callback: CallbackQuery, state: FSMContext):
+    """Start lost item notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            t("notifications_lost_item_what", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_item_what)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_item_what)
+async def process_lost_item_what(message: Message, state: FSMContext):
+    """Process lost item what"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(what=message.text)
+        await message.answer(t("notifications_lost_item_desc", user.language))
+        await state.set_state(UserStates.notification_item_desc)
+
+
+@router.message(UserStates.notification_item_desc)
+async def process_lost_item_desc(message: Message, state: FSMContext):
+    """Process lost item description"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(description=message.text)
+        
+        skip_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
+            resize_keyboard=True
+        )
+        await message.answer(t("notifications_lost_item_photo", user.language), reply_markup=skip_keyboard)
+        await state.set_state(UserStates.notification_item_photo)
+
+
+@router.message(UserStates.notification_item_photo)
+async def process_lost_item_photo(message: Message, state: FSMContext):
+    """Process lost item photo"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        photo_url = None
+        if message.photo:
+            photo_url = message.photo[-1].file_id
+        
+        await state.update_data(photo_url=photo_url)
+        await message.answer(t("notifications_lost_item_location", user.language))
+        await state.set_state(UserStates.notification_item_location)
+
+
+@router.message(UserStates.notification_item_location)
+async def process_lost_item_location(message: Message, state: FSMContext):
+    """Process lost item location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text)
+        await message.answer(t("notifications_lost_item_phone", user.language))
+        await state.set_state(UserStates.notification_item_phone)
+
+
+@router.message(UserStates.notification_item_phone)
+async def process_lost_item_phone(message: Message, state: FSMContext):
+    """Process lost item phone and create notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        data = await state.get_data()
+        
+        # Create notification
+        notification = await NotificationService.create_notification(
+            session,
+            notification_type="PROPAJA_NARSA",
+            creator_id=user.id,
+            title=data["what"],
+            description=data["description"],
+            location=data["location"],
+            phone=message.text,
+            photo_url=data.get("photo_url")
+        )
+        
+        # Notify all users
+        all_users = await UserService.get_all_users(session)
+        for target_user in all_users:
+            if target_user.notifications_enabled and target_user.id != user.id:
+                try:
+                    alert_text = t("notifications_alert_item", target_user.language,
+                                 what=data["what"],
+                                 description=data["description"],
+                                 location=data["location"],
+                                 phone=message.text)
+                    
+                    if data.get("photo_url"):
+                        await message.bot.send_photo(
+                            target_user.telegram_id,
+                            photo=data["photo_url"],
+                            caption=alert_text
+                        )
+                    else:
+                        await message.bot.send_message(
+                            target_user.telegram_id,
+                            alert_text
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
+        
+        await message.answer(
+            t("notifications_created", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
+        )
+        await state.clear()
+
+
+@router.message(F.text.in_([t("menu_shurta", "RU"), t("menu_shurta", "UZ")]))
+async def handle_shurta(message: Message, state: FSMContext):
+    """Handle shurta (police) alerts"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user or user.is_banned:
+            return
+        
+        await message.answer(
+            t("shurta_description", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.shurta_description)
+
+
+@router.message(UserStates.shurta_description)
+async def process_shurta_description(message: Message, state: FSMContext):
+    """Process shurta description"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(description=message.text)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("shurta_location_maps", user.language), callback_data="shurta_maps")],
+            [InlineKeyboardButton(text=t("shurta_location_geo", user.language), callback_data="shurta_geo")],
+            [InlineKeyboardButton(text=t("shurta_location_text", user.language), callback_data="shurta_text")]
+        ])
+        
+        await message.answer(
+            t("shurta_location_choice", user.language),
+            reply_markup=keyboard
+        )
+        await state.set_state(UserStates.shurta_location_choice)
+
+
+@router.callback_query(F.data == "shurta_text")
+async def shurta_text_location(callback: CallbackQuery, state: FSMContext):
+    """Text address for shurta"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(t("shurta_location_input", user.language))
+        await state.set_state(UserStates.shurta_location_input)
+    await callback.answer()
+
+
+@router.message(UserStates.shurta_location_input)
+async def process_shurta_location_text(message: Message, state: FSMContext):
+    """Process shurta text location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location_info=message.text)
+        
+        skip_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
+            resize_keyboard=True
+        )
+        await message.answer(t("shurta_photo", user.language), reply_markup=skip_keyboard)
+        await state.set_state(UserStates.shurta_photo)
+
+
+@router.message(UserStates.shurta_photo)
+async def process_shurta_photo(message: Message, state: FSMContext):
+    """Process shurta photo and create alert"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        photo_url = None
+        if message.photo:
+            photo_url = message.photo[-1].file_id
+        
+        data = await state.get_data()
+        
+        # Create alert
+        alert = await ShurtaService.create_alert(
+            session,
+            creator_id=user.id,
+            description=data["description"],
+            location_info=data["location_info"],
+            photo_url=photo_url
+        )
+        
+        # Notify all users
+        all_users = await UserService.get_all_users(session)
+        for target_user in all_users:
+            if target_user.notifications_enabled and target_user.id != user.id:
+                try:
+                    alert_text = t("shurta_alert", target_user.language,
+                                 description=data["description"],
+                                 location=data["location_info"])
+                    
+                    if photo_url:
+                        await message.bot.send_photo(
+                            target_user.telegram_id,
+                            photo=photo_url,
+                            caption=alert_text
+                        )
+                    else:
+                        await message.bot.send_message(
+                            target_user.telegram_id,
+                            alert_text
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
+        
+        await message.answer(
+            t("shurta_created", user.language),
+            reply_markup=get_main_menu_keyboard(user.language)
+        )
+        await state.clear()
+
+
+def register_user_handlers(dp: Dispatcher):
     """Register all user handlers"""
     dp.include_router(router)
-    logger.info("User handlers registered")

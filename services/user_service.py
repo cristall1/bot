@@ -2,7 +2,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
-from models import User, UserPreference
+from models import User
 from utils.logger import logger
 
 

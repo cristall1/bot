@@ -1,603 +1,244 @@
 LOCALES = {
     "RU": {
-        # Welcome & Onboarding
-        "welcome": "Привет! 👋",
-        "welcome_desc": "Добро пожаловать в информационную систему Al-Azhar и Dirassa для студентов из Узбекистана, России, Казахстана и Киргизии.",
-        "welcome_capabilities": "Здесь ты можешь:\n📚 Получить информацию об учёбе\n🏢 Заказать услуги\n🚚 Стать курьером в Каире\n📞 Связаться с администрацией",
-        "choose_language": "Выбери язык:",
+        # Welcome & Language Selection
+        "welcome": "Добро пожаловать! 👋",
+        "choose_language": "Выберите язык:",
         "language_selected": "✅ Язык установлен: Русский",
-        "choose_citizenship": "Ты гражданин какой страны?",
-        "citizenship_uz": "🇺🇿 Узбекистана",
-        "citizenship_ru": "🇷🇺 России",
-        "citizenship_kz": "🇰🇿 Казахстана",
-        "citizenship_kg": "🇰🇬 Киргизии",
-        "citizenship_selected": "✅ Выбрано: {citizenship}",
-        "registration_complete": "✅ Регистрация завершена! Добро пожаловать в систему.",
         
-        # Main Menu
+        # Main Menu (6 buttons)
         "main_menu": "🏠 Главное меню",
-        "menu_categories": "📚 Категории",
-        "menu_services": "🏢 Услуги",
-        "menu_search": "🔍 Поиск",
-        "menu_contact": "📞 Написать админу",
-        "menu_courier": "🚚 Стать курьером",
+        "menu_documents": "📄 Документы",
+        "menu_delivery": "🚚 Доставка",
+        "menu_notifications": "🔔 Уведомления",
+        "menu_shurta": "🚨 Полиция",
+        "menu_admin_contact": "👨‍💼 Написать админу",
         "menu_settings": "⚙️ Настройки",
-        "menu_help": "ℹ️ Справка",
         
-        # Categories
-        "categories": "📚 Категории",
-        "select_category": "Выбери категорию:",
-        "category_empty": "В этой категории пока нет контента.",
-        "no_categories": "Категории пока не добавлены.",
-        "subcategories": "📂 Подкатегории:",
-        "category_content": "📄 Контент:",
+        # Documents (Hujjat Yordami)
+        "documents_title": "📄 Помощь с документами",
+        "select_citizenship": "Выберите гражданство:",
+        "citizenship_uz": "🇺🇿 Узбекистан",
+        "citizenship_ru": "🇷🇺 Россия",
+        "citizenship_kz": "🇰🇿 Казахстан",
+        "citizenship_kg": "🇰🇬 Кыргызстан",
+        "no_documents": "Документы для этой страны еще не добавлены.",
+        "document_content": "📋 {title}",
+        "back": "← Назад",
+        "to_main_menu": "🏠 Главное меню",
         
-        # Services
-        "services": "🏢 Услуги",
-        "services_list": "Доступные услуги:",
-        "service_request": "Запросить услугу",
-        "service_type": "Тип услуги:",
-        "service_title": "Название услуги:",
-        "service_description": "Описание:",
-        "service_contact": "Контактный телефон:",
-        "service_location": "Местоположение:",
-        "service_image": "Загрузи фото (или пропусти):",
-        "service_submitted": "✅ Заявка отправлена на модерацию!",
-        "service_approved": "✅ Твоя услуга одобрена и опубликована!",
-        "service_rejected": "❌ Твоя услуга отклонена.",
-        "no_services": "Пока нет доступных услуг.",
-        "my_services": "Мои услуги",
-        "service_types": {
-            "COURIER": "Курьер",
-            "TUTORING": "Репетиторство",
-            "ACCOMMODATION": "Жильё",
-            "HOUSING": "Размещение",
-            "TRANSLATION": "Перевод",
-            "LEGAL": "Юридические услуги",
-            "OTHER": "Другое"
-        },
+        # Delivery (Dostavka)
+        "delivery_title": "🚚 Служба доставки",
+        "delivery_menu_create": "📦 Создать новый заказ",
+        "delivery_menu_active": "🚚 Активные заказы",
+        "delivery_menu_my_stats": "📊 Моя статистика",
+        "delivery_create_desc": "💬 Что нужно доставить?",
+        "delivery_create_location": "📍 С какого района? На какой район?",
+        "delivery_create_phone": "📞 Контактный телефон:",
+        "delivery_created": "✅ Заказ создан! Курьеры получили уведомление.",
+        "delivery_accepted": "✅ Курьер принял ваш заказ!",
+        "delivery_open_chat": "💬 Открыть чат с курьером",
+        "delivery_take": "✅ Взять заказ",
+        "delivery_reject": "❌ Отклонить",
+        "delivery_taken": "✅ Заказ принят! Клиент получит уведомление.",
+        "delivery_rejected": "❌ Заказ отклонен.",
+        "delivery_already_taken": "Этот заказ уже взят другим курьером.",
+        "delivery_no_active": "Нет активных заказов.",
+        "delivery_become_courier": "🚚 Стать курьером",
+        "delivery_courier_registered": "✅ Теперь вы курьер!",
+        "delivery_stats_title": "📊 Статистика курьера",
+        "delivery_stats_completed": "✅ Выполнено доставок: {count}",
+        "delivery_stats_rating": "⭐ Рейтинг: {rating}/5.0",
+        "delivery_stats_not_courier": "Вы еще не курьер.",
+        "delivery_alert_new": "🚚 Новый заказ доставки!\n\n📦 {description}\n📍 {location}\n📞 {phone}",
         
-        # Courier System
-        "courier_title": "🚚 Система курьеров в Каире",
-        "courier_desc": "Помогай студентам получать посылки в Каире и зарабатывай!",
-        "courier_benefits": "💰 Преимущества:\n• Гибкий график\n• Оплата за доставку\n• Помощь землякам\n• Рейтинговая система",
-        "courier_requirements": "📋 Требования:\n• Проживание в Каире\n• Наличие транспорта (желательно)\n• Ответственность\n• Доступность по телефону",
-        "courier_zones": "🗺️ Зоны доставки: Наср Сити, Гелиополис, Маади, Докки, Замалек",
-        "become_courier": "✅ Стать курьером",
-        "accept_courier_terms": "Принять условия и стать курьером",
-        "courier_registered": "✅ Поздравляем! Ты теперь курьер!",
-        "courier_active": "📬 Активные доставки",
-        "courier_stats": "📊 Моя статистика",
-        "courier_manage": "⚙️ Управление профилем",
-        "courier_rating": "⭐ Рейтинг: {rating}/5.0",
-        "courier_deliveries": "📦 Выполнено доставок: {count}",
-        "courier_zone": "🗺️ Зона: {zone}",
-        "courier_status": "Статус: {status}",
-        "no_active_deliveries": "Нет активных доставок.",
-        "already_courier": "Ты уже курьер! 🚚",
+        # Notifications (Xabarnoma)
+        "notifications_title": "🔔 Уведомления",
+        "notifications_menu_lost_person": "👤 Пропал человек",
+        "notifications_menu_lost_item": "📦 Потеря вещи",
+        "notifications_lost_person_name": "👤 Имя пропавшего:",
+        "notifications_lost_person_desc": "📝 Описание:",
+        "notifications_lost_person_photo": "📷 Фото (необязательно):",
+        "notifications_lost_person_location": "📍 Адрес/район:",
+        "notifications_lost_person_phone": "📞 Контактный телефон:",
+        "notifications_lost_item_what": "📦 Что потеряно?",
+        "notifications_lost_item_desc": "📝 Описание:",
+        "notifications_lost_item_photo": "📷 Фото (необязательно):",
+        "notifications_lost_item_location": "📍 Где потеряно?",
+        "notifications_lost_item_phone": "📞 Контакт:",
+        "notifications_created": "✅ Уведомление создано! Все пользователи получат его.",
+        "notifications_skip_photo": "⏭ Пропустить",
+        "notifications_alert_person": "🚨 ПРОПАЛ ЧЕЛОВЕК\n\n👤 {name}\n📝 {description}\n📍 {location}\n📞 {phone}",
+        "notifications_alert_item": "🔔 ПОТЕРЯ ВЕЩИ\n\n📦 {what}\n📝 {description}\n📍 {location}\n📞 {phone}",
         
-        # Search
-        "search": "🔍 Поиск",
-        "search_prompt": "Введи поисковый запрос:",
-        "search_results": "Результаты поиска:",
-        "no_search_results": "Ничего не найдено по запросу: {query}",
+        # Shurta (Police)
+        "shurta_title": "🚨 Полиция - Алерт",
+        "shurta_description": "💬 Что произошло?",
+        "shurta_location_choice": "📍 Как указать местоположение?",
+        "shurta_location_maps": "🗺 Google Maps ссылка",
+        "shurta_location_geo": "📍 Отправить геолокацию",
+        "shurta_location_text": "✏️ Текстовый адрес",
+        "shurta_location_input": "📍 Введите адрес (район/улица):",
+        "shurta_photo": "📷 Фото (необязательно):",
+        "shurta_created": "✅ Алерт создан! Все пользователи уведомлены.",
+        "shurta_alert": "🚨 ПОЛИЦИЯ - АЛЕРТ\n\n📝 {description}\n📍 {location}",
         
-        # Contact Admin
-        "contact_admin": "📞 Написать админу",
-        "contact_admin_prompt": "Напиши сообщение администрации:",
-        "message_sent": "✅ Сообщение отправлено! Мы ответим в ближайшее время.",
-        "admin_reply": "💬 Ответ от администрации:\n\n{reply}",
+        # Admin Contact
+        "admin_contact_title": "👨‍💼 Написать админу",
+        "admin_contact_prompt": "💬 Напишите ваше сообщение:",
+        "admin_contact_sent": "✅ Сообщение отправлено администратору!",
         
         # Settings
-        "settings": "⚙️ Настройки",
-        "settings_language": "🌐 Язык:",
-        "settings_notifications": "🔔 Уведомления:",
-        "settings_citizenship": "🌍 Гражданство:",
-        "notifications_enabled": "✅ Включены",
-        "notifications_disabled": "❌ Выключены",
-        "change_language": "Сменить язык",
-        "change_citizenship": "Сменить гражданство",
-        "toggle_notifications": "Переключить уведомления",
-        "settings_updated": "✅ Настройки обновлены",
-        
-        # Help
-        "help": "ℹ️ Справка",
-        "help_text": """
-📚 **Категории** - информация об учёбе в Al-Azhar и Dirassa
-
-🏢 **Услуги** - запроси или предложи услуги (курьер, репетиторство, жильё)
-
-🚚 **Стать курьером** - зарабатывай на доставках в Каире
-
-📞 **Написать админу** - задай вопрос администрации
-
-⚙️ **Настройки** - измени язык, гражданство, уведомления
-
-По всем вопросам: @admin
-""",
-        
-        # Admin Bot
-        "admin_menu": "🛠️ Админ Меню",
-        "admin_welcome": "Добро пожаловать в панель администратора!",
-        "admin_categories": "📚 Управление категориями",
-        "admin_buttons": "🔗 Управление кнопками",
-        "admin_services": "🏢 Управление услугами",
-        "admin_users": "👥 Управление пользователями",
-        "admin_couriers": "🚚 Управление курьерами",
-        "admin_broadcast": "📢 Рассылка",
-        "admin_stats": "📊 Статистика",
-        "admin_settings": "⚙️ Системные настройки",
-        "admin_export": "📋 Экспорт & Архив",
-        "admin_parse": "🔍 Анализ контента",
-        
-        # Category Management
-        "add_category": "➕ Добавить категорию",
-        "edit_category": "✏️ Редактировать категорию",
-        "delete_category": "🗑️ Удалить категорию",
-        "view_category_tree": "🌳 Дерево категорий",
-        "toggle_category": "🔄 Вкл/Выкл категорию",
-        "category_name_ru": "Введи название (RU):",
-        "category_name_uz": "Введи название (UZ):",
-        "category_desc_ru": "Введи описание (RU):",
-        "category_desc_uz": "Введи описание (UZ):",
-        "category_parent": "Выбери родительскую категорию:",
-        "category_level": "Уровень:",
-        "category_type": "Тип категории:",
-        "category_citizenship": "Гражданство:",
-        "category_icon": "Выбери иконку:",
-        "category_added": "✅ Категория добавлена",
-        "category_updated": "✅ Категория обновлена",
-        "category_deleted": "✅ Категория удалена",
-        "category_toggled": "✅ Статус категории изменён",
-        "select_parent_category": "Выбери родительскую категорию (или пропусти):",
-        "no_parent": "Без родителя (корневая)",
-        
-        # Button Management
-        "add_button": "➕ Добавить кнопку",
-        "edit_button": "✏️ Редактировать кнопку",
-        "delete_button": "🗑️ Удалить кнопку",
-        "list_buttons": "📋 Список кнопок",
-        "button_text_ru": "Текст кнопки (RU):",
-        "button_text_uz": "Текст кнопки (UZ):",
-        "button_url": "URL кнопки:",
-        "button_type": "Тип кнопки:",
-        "button_added": "✅ Кнопка добавлена",
-        "button_updated": "✅ Кнопка обновлена",
-        "button_deleted": "✅ Кнопка удалена",
-        "select_category_for_button": "Выбери категорию для кнопки:",
-        "no_buttons": "Кнопки не найдены.",
-        
-        # Service Management
-        "pending_services": "⏳ Заявки на модерацию",
-        "approved_services": "✅ Одобренные услуги",
-        "approve_service": "✅ Одобрить",
-        "reject_service": "❌ Отклонить",
-        "service_approved_admin": "✅ Услуга одобрена",
-        "service_rejected_admin": "❌ Услуга отклонена",
-        "no_pending_services": "Нет заявок на модерацию.",
-        
-        # User Management
-        "users_list": "👥 Список пользователей",
-        "search_user": "🔍 Поиск пользователя",
-        "user_details": "Детали пользователя",
-        "ban_user": "🚫 Заблокировать",
-        "unban_user": "✅ Разблокировать",
-        "make_admin": "👑 Сделать админом",
-        "remove_admin": "👤 Убрать админа",
-        "user_banned": "✅ Пользователь заблокирован",
-        "user_unbanned": "✅ Пользователь разблокирован",
-        "user_made_admin": "✅ Пользователь назначен админом",
-        "user_removed_admin": "✅ Админ-права сняты",
-        "total_users": "Всего пользователей: {count}",
-        "users_today": "Новых сегодня: {count}",
-        "users_by_language": "По языкам - RU: {ru}, UZ: {uz}",
-        "users_by_citizenship": "По гражданству - UZ: {uz}, RU: {ru}, KZ: {kz}, KG: {kg}",
-        
-        # Courier Management
-        "couriers_list": "🚚 Список курьеров",
-        "courier_details": "Детали курьера",
-        "verify_courier": "✅ Верифицировать",
-        "suspend_courier": "⏸️ Приостановить",
-        "remove_courier_status": "❌ Убрать статус курьера",
-        "courier_verified": "✅ Курьер верифицирован",
-        "courier_suspended": "⏸️ Курьер приостановлен",
-        "courier_removed": "❌ Статус курьера удалён",
-        "total_couriers": "Всего курьеров: {count}",
-        "active_couriers": "Активных: {count}",
-        "total_deliveries": "Всего доставок: {count}",
-        "average_rating": "Средний рейтинг: {rating}",
-        
-        # Broadcast
-        "create_broadcast": "📢 Создать рассылку",
-        "broadcast_message_ru": "Сообщение (RU):",
-        "broadcast_message_uz": "Сообщение (UZ):",
-        "broadcast_image": "Изображение (или пропусти):",
-        "broadcast_filter": "Фильтр:",
-        "broadcast_all": "Всем пользователям",
-        "broadcast_language_ru": "Только русскоязычным",
-        "broadcast_language_uz": "Только узбекоязычным",
-        "broadcast_citizenship": "По гражданству",
-        "broadcast_couriers": "Только курьерам",
-        "broadcast_recipients": "Получателей: {count}",
-        "broadcast_confirm": "Отправить рассылку?",
-        "broadcast_sent": "✅ Рассылка отправлена {count} пользователям",
-        
-        # Statistics
-        "stats_users": "👥 Пользователи",
-        "stats_content": "📚 Контент",
-        "stats_services": "🏢 Услуги",
-        "stats_couriers": "🚚 Курьеры",
-        "stats_messages": "💬 Сообщения",
-        "categories_total": "Категорий: {count}",
-        "buttons_total": "Кнопок: {count}",
-        "content_total": "Контента: {count}",
-        "services_total": "Заявок на услуги: {count}",
-        "services_approved": "Одобрено: {count}",
-        "services_pending": "На модерации: {count}",
-        "messages_total": "Сообщений от пользователей: {count}",
-        "messages_unanswered": "Без ответа: {count}",
-        
-        # System Settings
-        "system_settings": "⚙️ Системные настройки",
-        "setting_enabled": "✅ Включено",
-        "setting_disabled": "❌ Выключено",
-        "setting_toggled": "✅ Настройка изменена",
-        
-        # Content Parsing
-        "parse_content": "🔍 Анализ контента",
-        "parse_start": "Начать анализ result.json",
-        "parse_progress": "⏳ Анализ в процессе...",
-        "parse_complete": "✅ Анализ завершён!",
-        "parse_found": "Найдено:\n• Dirassa: {dirassa}\n• Al-Azhar: {alazhar}\n• Контакты: {contacts}",
-        
-        # Buttons
-        "btn_add": "➕ Добавить",
-        "btn_edit": "✏️ Редактировать",
-        "btn_delete": "🗑️ Удалить",
-        "btn_view": "👁️ Просмотр",
-        "btn_approve": "✅ Одобрить",
-        "btn_reject": "❌ Отклонить",
-        "btn_back": "↩️ Назад",
-        "btn_save": "💾 Сохранить",
-        "btn_cancel": "❌ Отмена",
-        "btn_confirm": "✅ Подтвердить",
-        "btn_skip": "⏭️ Пропустить",
-        "btn_next": "➡️ Далее",
-        "btn_ban": "🚫 Заблокировать",
-        "btn_unban": "✅ Разблокировать",
-        "btn_send": "📤 Отправить",
-        "btn_toggle": "🔄 Переключить",
-        
-        # Messages
-        "success": "✅ Успешно",
-        "success_added": "✅ Успешно добавлено",
-        "success_updated": "✅ Успешно обновлено",
-        "success_deleted": "✅ Успешно удалено",
-        "error": "❌ Ошибка",
-        "error_occurred": "Произошла ошибка. Попробуй позже.",
-        "invalid_input": "❌ Неверный ввод",
-        "invalid_url": "❌ Неверный URL",
-        "operation_cancelled": "❌ Операция отменена",
-        "not_authorized": "❌ Нет доступа",
-        "user_banned": "❌ Ты заблокирован",
-        "feature_disabled": "❌ Эта функция отключена",
+        "settings_title": "⚙️ Настройки",
+        "settings_language": "🌐 Язык",
+        "settings_notifications": "🔔 Уведомления",
+        "settings_notifications_on": "✅ Включены",
+        "settings_notifications_off": "❌ Выключены",
+        "settings_change_language": "Сменить язык",
+        "settings_toggle_notifications": "Переключить уведомления",
+        "settings_notifications_enabled": "✅ Уведомления включены",
+        "settings_notifications_disabled": "❌ Уведомления выключены",
         
         # Common
-        "yes": "Да",
-        "no": "Нет",
-        "all": "Все",
-        "active": "Активный",
-        "inactive": "Неактивный",
-        "pending": "Ожидает",
-        "approved": "Одобрено",
-        "rejected": "Отклонено",
-        "loading": "⏳ Загрузка...",
-        "please_wait": "⏳ Подожди...",
+        "error": "❌ Произошла ошибка. Попробуйте позже.",
+        "cancel": "❌ Отмена",
+        "cancelled": "❌ Отменено.",
+        "invalid_input": "❌ Неверный ввод. Попробуйте снова.",
+        "banned": "❌ Ваш аккаунт заблокирован.",
+        "send": "✅ Отправить",
     },
+    
     "UZ": {
-        # Welcome & Onboarding
-        "welcome": "Salom! 👋",
-        "welcome_desc": "O'zbekiston, Rossiya, Qozog'iston va Qirg'iziston talabalari uchun Al-Azhar va Dirassa axborot tizimiga xush kelibsiz.",
-        "welcome_capabilities": "Bu yerda siz:\n📚 O'qish haqida ma'lumot olishingiz\n🏢 Xizmatlar buyurtma qilishingiz\n🚚 Qohirada kuryer bo'lishingiz\n📞 Ma'muriyat bilan bog'lanishingiz mumkin",
+        # Welcome & Language Selection
+        "welcome": "Xush kelibsiz! 👋",
         "choose_language": "Tilni tanlang:",
-        "language_selected": "✅ Til o'rnatildi: O'zbekcha",
-        "choose_citizenship": "Qaysi davlatning fuqarosisiz?",
-        "citizenship_uz": "🇺🇿 O'zbekiston",
+        "language_selected": "✅ Til o'rnatildi: Oʻzbekcha",
+        
+        # Main Menu (6 buttons)
+        "main_menu": "🏠 Asosiy menyu",
+        "menu_documents": "📄 Hujjat yordami",
+        "menu_delivery": "🚚 Dostavka xizmati",
+        "menu_notifications": "🔔 Xabarnoma",
+        "menu_shurta": "🚨 Shurta",
+        "menu_admin_contact": "👨‍💼 Admin bilan bog'lanish",
+        "menu_settings": "⚙️ Sozlamalar",
+        
+        # Documents (Hujjat Yordami)
+        "documents_title": "📄 Hujjat yordami",
+        "select_citizenship": "Fuqoroligingizni tanlang:",
+        "citizenship_uz": "🇺🇿 Oʻzbekiston",
         "citizenship_ru": "🇷🇺 Rossiya",
         "citizenship_kz": "🇰🇿 Qozog'iston",
         "citizenship_kg": "🇰🇬 Qirg'iziston",
-        "citizenship_selected": "✅ Tanlandi: {citizenship}",
-        "registration_complete": "✅ Ro'yxatdan o'tish yakunlandi! Tizimga xush kelibsiz.",
+        "no_documents": "Bu mamlakat uchun hujjatlar hali qo'shilmagan.",
+        "document_content": "📋 {title}",
+        "back": "← Orqaga",
+        "to_main_menu": "🏠 Asosiy menyu",
         
-        # Main Menu
-        "main_menu": "🏠 Asosiy menyu",
-        "menu_categories": "📚 Kategoriyalar",
-        "menu_services": "🏢 Xizmatlar",
-        "menu_search": "🔍 Qidiruv",
-        "menu_contact": "📞 Adminga yozish",
-        "menu_courier": "🚚 Kuryer bo'lish",
-        "menu_settings": "⚙️ Sozlamalar",
-        "menu_help": "ℹ️ Yordam",
+        # Delivery (Dostavka)
+        "delivery_title": "🚚 Dostavka xizmati",
+        "delivery_menu_create": "📦 Yangi zakaz yaratish",
+        "delivery_menu_active": "🚚 Faol zakazlar",
+        "delivery_menu_my_stats": "📊 Mening statistikam",
+        "delivery_create_desc": "💬 Nima yetkazish kerak?",
+        "delivery_create_location": "📍 Qayerdan? Qayerga?",
+        "delivery_create_phone": "📞 Kontakt telefon:",
+        "delivery_created": "✅ Zakaz yaratildi! Kuryerlar xabardor qilindi.",
+        "delivery_accepted": "✅ Kuryer zakazingizni qabul qildi!",
+        "delivery_open_chat": "💬 Kuryer bilan chatni ochish",
+        "delivery_take": "✅ Olish",
+        "delivery_reject": "❌ Rad etish",
+        "delivery_taken": "✅ Zakaz qabul qilindi! Mijoz xabardor qilindi.",
+        "delivery_rejected": "❌ Zakaz rad etildi.",
+        "delivery_already_taken": "Bu zakazni boshqa kuryer olgan.",
+        "delivery_no_active": "Faol zakazlar yo'q.",
+        "delivery_become_courier": "🚚 Kuryer bo'lish",
+        "delivery_courier_registered": "✅ Endi siz kuryersiz!",
+        "delivery_stats_title": "📊 Kuryer statistikasi",
+        "delivery_stats_completed": "✅ Bajarilgan: {count}",
+        "delivery_stats_rating": "⭐ Reyting: {rating}/5.0",
+        "delivery_stats_not_courier": "Siz hali kuryer emassiz.",
+        "delivery_alert_new": "🚚 Yangi zakaz!\n\n📦 {description}\n📍 {location}\n📞 {phone}",
         
-        # Categories
-        "categories": "📚 Kategoriyalar",
-        "select_category": "Kategoriyani tanlang:",
-        "category_empty": "Bu kategoriyada hali kontent yo'q.",
-        "no_categories": "Kategoriyalar hali qo'shilmagan.",
-        "subcategories": "📂 Subkategoriyalar:",
-        "category_content": "📄 Kontent:",
+        # Notifications (Xabarnoma)
+        "notifications_title": "🔔 Xabarnoma",
+        "notifications_menu_lost_person": "👤 Propaja odam",
+        "notifications_menu_lost_item": "📦 Propaja narsa",
+        "notifications_lost_person_name": "👤 Yo'qolgan odamning ismi:",
+        "notifications_lost_person_desc": "📝 Tavsif:",
+        "notifications_lost_person_photo": "📷 Foto (ixtiyoriy):",
+        "notifications_lost_person_location": "📍 Manzil/tuman:",
+        "notifications_lost_person_phone": "📞 Kontakt telefon:",
+        "notifications_lost_item_what": "📦 Nima yo'qoldi?",
+        "notifications_lost_item_desc": "📝 Tavsif:",
+        "notifications_lost_item_photo": "📷 Foto (ixtiyoriy):",
+        "notifications_lost_item_location": "📍 Qayerda yo'qoldi?",
+        "notifications_lost_item_phone": "📞 Kontakt:",
+        "notifications_created": "✅ Xabarnoma yaratildi! Barcha foydalanuvchilar uni oladi.",
+        "notifications_skip_photo": "⏭ O'tkazib yuborish",
+        "notifications_alert_person": "🚨 ODAM YO'QOLDI\n\n👤 {name}\n📝 {description}\n📍 {location}\n📞 {phone}",
+        "notifications_alert_item": "🔔 NARSA YO'QOLDI\n\n📦 {what}\n📝 {description}\n📍 {location}\n📞 {phone}",
         
-        # Services
-        "services": "🏢 Xizmatlar",
-        "services_list": "Mavjud xizmatlar:",
-        "service_request": "Xizmat so'rash",
-        "service_type": "Xizmat turi:",
-        "service_title": "Xizmat nomi:",
-        "service_description": "Tavsif:",
-        "service_contact": "Aloqa telefoni:",
-        "service_location": "Manzil:",
-        "service_image": "Rasm yuklang (yoki o'tkazing):",
-        "service_submitted": "✅ Ariza moderatsiyaga yuborildi!",
-        "service_approved": "✅ Sizning xizmatingiz tasdiqlandi va e'lon qilindi!",
-        "service_rejected": "❌ Sizning xizmatingiz rad etildi.",
-        "no_services": "Hali mavjud xizmatlar yo'q.",
-        "my_services": "Mening xizmatlarim",
-        "service_types": {
-            "COURIER": "Kuryer",
-            "TUTORING": "Repetitorlik",
-            "ACCOMMODATION": "Turar joy",
-            "HOUSING": "Joylashish",
-            "TRANSLATION": "Tarjima",
-            "LEGAL": "Yuridik xizmatlar",
-            "OTHER": "Boshqa"
-        },
+        # Shurta (Police)
+        "shurta_title": "🚨 Shurta - Ogohlantirish",
+        "shurta_description": "💬 Nima sodir bo'ldi?",
+        "shurta_location_choice": "📍 Joylashuvni qanday ko'rsatish?",
+        "shurta_location_maps": "🗺 Google Maps havolasi",
+        "shurta_location_geo": "📍 Geolokatsiyani yuborish",
+        "shurta_location_text": "✏️ Matnli manzil",
+        "shurta_location_input": "📍 Manzilni kiriting (tuman/ko'cha):",
+        "shurta_photo": "📷 Foto (ixtiyoriy):",
+        "shurta_created": "✅ Ogohlantirish yaratildi! Barcha foydalanuvchilar xabardor qilindi.",
+        "shurta_alert": "🚨 SHURTA - OGOHLANTIRISH\n\n📝 {description}\n📍 {location}",
         
-        # Courier System
-        "courier_title": "🚚 Qohirada kuryer tizimi",
-        "courier_desc": "Talabalarga Qohirada pochta olishda yordam bering va pul ishlang!",
-        "courier_benefits": "💰 Afzalliklar:\n• Moslashuvchan jadval\n• Yetkazib berish uchun to'lov\n• Vatandoshlarga yordam\n• Reyting tizimi",
-        "courier_requirements": "📋 Talablar:\n• Qohirada yashash\n• Transport mavjudligi (afzalroq)\n• Mas'uliyat\n• Telefon orqali aloqada bo'lish",
-        "courier_zones": "🗺️ Yetkazib berish hududlari: Nasr City, Heliopolis, Maadi, Dokki, Zamalek",
-        "become_courier": "✅ Kuryer bo'lish",
-        "accept_courier_terms": "Shartlarni qabul qilish va kuryer bo'lish",
-        "courier_registered": "✅ Tabriklaymiz! Siz endi kuryersiz!",
-        "courier_active": "📬 Faol yetkazib berishlar",
-        "courier_stats": "📊 Mening statistikam",
-        "courier_manage": "⚙️ Profilni boshqarish",
-        "courier_rating": "⭐ Reyting: {rating}/5.0",
-        "courier_deliveries": "📦 Bajarilgan yetkazib berishlar: {count}",
-        "courier_zone": "🗺️ Hudud: {zone}",
-        "courier_status": "Status: {status}",
-        "no_active_deliveries": "Faol yetkazib berishlar yo'q.",
-        "already_courier": "Siz allaqachon kuryersiz! 🚚",
-        
-        # Search
-        "search": "🔍 Qidiruv",
-        "search_prompt": "Qidiruv so'rovini kiriting:",
-        "search_results": "Qidiruv natijalari:",
-        "no_search_results": "So'rov bo'yicha hech narsa topilmadi: {query}",
-        
-        # Contact Admin
-        "contact_admin": "📞 Adminga yozish",
-        "contact_admin_prompt": "Ma'muriyatga xabar yozing:",
-        "message_sent": "✅ Xabar yuborildi! Tez orada javob beramiz.",
-        "admin_reply": "💬 Ma'muriyatdan javob:\n\n{reply}",
+        # Admin Contact
+        "admin_contact_title": "👨‍💼 Admin bilan bog'lanish",
+        "admin_contact_prompt": "💬 Xabaringizni yozing:",
+        "admin_contact_sent": "✅ Xabar administratorga yuborildi!",
         
         # Settings
-        "settings": "⚙️ Sozlamalar",
-        "settings_language": "🌐 Til:",
-        "settings_notifications": "🔔 Xabarnomalar:",
-        "settings_citizenship": "🌍 Fuqarolik:",
-        "notifications_enabled": "✅ Yoqilgan",
-        "notifications_disabled": "❌ O'chirilgan",
-        "change_language": "Tilni o'zgartirish",
-        "change_citizenship": "Fuqarolikni o'zgartirish",
-        "toggle_notifications": "Xabarnomalarni almashtirish",
-        "settings_updated": "✅ Sozlamalar yangilandi",
-        
-        # Help
-        "help": "ℹ️ Yordam",
-        "help_text": """
-📚 **Kategoriyalar** - Al-Azhar va Dirassa da o'qish haqida ma'lumot
-
-🏢 **Xizmatlar** - xizmat so'rang yoki taklif qiling (kuryer, repetitor, uy)
-
-🚚 **Kuryer bo'lish** - Qohirada yetkazib berishdan pul ishlang
-
-📞 **Adminga yozish** - ma'muriyatga savol bering
-
-⚙️ **Sozlamalar** - til, fuqarolik, xabarnomalarni o'zgartiring
-
-Barcha savollar bo'yicha: @admin
-""",
-        
-        # Admin Bot
-        "admin_menu": "🛠️ Admin menyusi",
-        "admin_welcome": "Administrator paneliga xush kelibsiz!",
-        "admin_categories": "📚 Kategoriyalarni boshqarish",
-        "admin_buttons": "🔗 Tugmalarni boshqarish",
-        "admin_services": "🏢 Xizmatlarni boshqarish",
-        "admin_users": "👥 Foydalanuvchilarni boshqarish",
-        "admin_couriers": "🚚 Kuryerlarni boshqarish",
-        "admin_broadcast": "📢 Jo'natish",
-        "admin_stats": "📊 Statistika",
-        "admin_settings": "⚙️ Tizim sozlamalari",
-        "admin_export": "📋 Eksport va arxiv",
-        "admin_parse": "🔍 Kontentni tahlil qilish",
-        
-        # Category Management
-        "add_category": "➕ Kategoriya qo'shish",
-        "edit_category": "✏️ Kategoriyani tahrirlash",
-        "delete_category": "🗑️ Kategoriyani o'chirish",
-        "view_category_tree": "🌳 Kategoriyalar daraxti",
-        "toggle_category": "🔄 Kategoriyani yoqish/o'chirish",
-        "category_name_ru": "Nomni kiriting (RU):",
-        "category_name_uz": "Nomni kiriting (UZ):",
-        "category_desc_ru": "Tavsifni kiriting (RU):",
-        "category_desc_uz": "Tavsifni kiriting (UZ):",
-        "category_parent": "Ota kategoriyani tanlang:",
-        "category_level": "Daraja:",
-        "category_type": "Kategoriya turi:",
-        "category_citizenship": "Fuqarolik:",
-        "category_icon": "Belgini tanlang:",
-        "category_added": "✅ Kategoriya qo'shildi",
-        "category_updated": "✅ Kategoriya yangilandi",
-        "category_deleted": "✅ Kategoriya o'chirildi",
-        "category_toggled": "✅ Kategoriya holati o'zgartirildi",
-        "select_parent_category": "Ota kategoriyani tanlang (yoki o'tkazing):",
-        "no_parent": "Ota yo'q (ildiz)",
-        
-        # Button Management
-        "add_button": "➕ Tugma qo'shish",
-        "edit_button": "✏️ Tugmani tahrirlash",
-        "delete_button": "🗑️ Tugmani o'chirish",
-        "list_buttons": "📋 Tugmalar ro'yxati",
-        "button_text_ru": "Tugma matni (RU):",
-        "button_text_uz": "Tugma matni (UZ):",
-        "button_url": "Tugma URL:",
-        "button_type": "Tugma turi:",
-        "button_added": "✅ Tugma qo'shildi",
-        "button_updated": "✅ Tugma yangilandi",
-        "button_deleted": "✅ Tugma o'chirildi",
-        "select_category_for_button": "Tugma uchun kategoriyani tanlang:",
-        "no_buttons": "Tugmalar topilmadi.",
-        
-        # Service Management
-        "pending_services": "⏳ Moderatsiya uchun arizalar",
-        "approved_services": "✅ Tasdiqlangan xizmatlar",
-        "approve_service": "✅ Tasdiqlash",
-        "reject_service": "❌ Rad etish",
-        "service_approved_admin": "✅ Xizmat tasdiqlandi",
-        "service_rejected_admin": "❌ Xizmat rad etildi",
-        "no_pending_services": "Moderatsiya uchun arizalar yo'q.",
-        
-        # User Management
-        "users_list": "👥 Foydalanuvchilar ro'yxati",
-        "search_user": "🔍 Foydalanuvchini qidirish",
-        "user_details": "Foydalanuvchi ma'lumotlari",
-        "ban_user": "🚫 Bloklash",
-        "unban_user": "✅ Blokni olib tashlash",
-        "make_admin": "👑 Admin qilish",
-        "remove_admin": "👤 Adminni olib tashlash",
-        "user_banned": "✅ Foydalanuvchi bloklandi",
-        "user_unbanned": "✅ Foydalanuvchi blokdan chiqarildi",
-        "user_made_admin": "✅ Foydalanuvchi admin qilindi",
-        "user_removed_admin": "✅ Admin huquqlari olib tashlandi",
-        "total_users": "Jami foydalanuvchilar: {count}",
-        "users_today": "Bugun yangilar: {count}",
-        "users_by_language": "Tillar bo'yicha - RU: {ru}, UZ: {uz}",
-        "users_by_citizenship": "Fuqarolik bo'yicha - UZ: {uz}, RU: {ru}, KZ: {kz}, KG: {kg}",
-        
-        # Courier Management
-        "couriers_list": "🚚 Kuryerlar ro'yxati",
-        "courier_details": "Kuryer ma'lumotlari",
-        "verify_courier": "✅ Tasdiqlash",
-        "suspend_courier": "⏸️ To'xtatish",
-        "remove_courier_status": "❌ Kuryer statusini olib tashlash",
-        "courier_verified": "✅ Kuryer tasdiqlandi",
-        "courier_suspended": "⏸️ Kuryer to'xtatildi",
-        "courier_removed": "❌ Kuryer statusi o'chirildi",
-        "total_couriers": "Jami kuryerlar: {count}",
-        "active_couriers": "Faol: {count}",
-        "total_deliveries": "Jami yetkazib berishlar: {count}",
-        "average_rating": "O'rtacha reyting: {rating}",
-        
-        # Broadcast
-        "create_broadcast": "📢 Jo'natish yaratish",
-        "broadcast_message_ru": "Xabar (RU):",
-        "broadcast_message_uz": "Xabar (UZ):",
-        "broadcast_image": "Rasm (yoki o'tkazing):",
-        "broadcast_filter": "Filtr:",
-        "broadcast_all": "Barcha foydalanuvchilarga",
-        "broadcast_language_ru": "Faqat rus tilida",
-        "broadcast_language_uz": "Faqat o'zbek tilida",
-        "broadcast_citizenship": "Fuqarolik bo'yicha",
-        "broadcast_couriers": "Faqat kuryerlarga",
-        "broadcast_recipients": "Qabul qiluvchilar: {count}",
-        "broadcast_confirm": "Jo'natishni yuborish?",
-        "broadcast_sent": "✅ Jo'natish {count} foydalanuvchilarga yuborildi",
-        
-        # Statistics
-        "stats_users": "👥 Foydalanuvchilar",
-        "stats_content": "📚 Kontent",
-        "stats_services": "🏢 Xizmatlar",
-        "stats_couriers": "🚚 Kuryerlar",
-        "stats_messages": "💬 Xabarlar",
-        "categories_total": "Kategoriyalar: {count}",
-        "buttons_total": "Tugmalar: {count}",
-        "content_total": "Kontent: {count}",
-        "services_total": "Xizmat arizalari: {count}",
-        "services_approved": "Tasdiqlandi: {count}",
-        "services_pending": "Moderatsiyada: {count}",
-        "messages_total": "Foydalanuvchilardan xabarlar: {count}",
-        "messages_unanswered": "Javobsiz: {count}",
-        
-        # System Settings
-        "system_settings": "⚙️ Tizim sozlamalari",
-        "setting_enabled": "✅ Yoqilgan",
-        "setting_disabled": "❌ O'chirilgan",
-        "setting_toggled": "✅ Sozlama o'zgartirildi",
-        
-        # Content Parsing
-        "parse_content": "🔍 Kontentni tahlil qilish",
-        "parse_start": "result.json tahlilini boshlash",
-        "parse_progress": "⏳ Tahlil jarayonda...",
-        "parse_complete": "✅ Tahlil yakunlandi!",
-        "parse_found": "Topildi:\n• Dirassa: {dirassa}\n• Al-Azhar: {alazhar}\n• Kontaktlar: {contacts}",
-        
-        # Buttons
-        "btn_add": "➕ Qo'shish",
-        "btn_edit": "✏️ Tahrirlash",
-        "btn_delete": "🗑️ O'chirish",
-        "btn_view": "👁️ Ko'rish",
-        "btn_approve": "✅ Tasdiqlash",
-        "btn_reject": "❌ Rad etish",
-        "btn_back": "↩️ Orqaga",
-        "btn_save": "💾 Saqlash",
-        "btn_cancel": "❌ Bekor qilish",
-        "btn_confirm": "✅ Tasdiqlash",
-        "btn_skip": "⏭️ O'tkazish",
-        "btn_next": "➡️ Keyingi",
-        "btn_ban": "🚫 Bloklash",
-        "btn_unban": "✅ Blokdan chiqarish",
-        "btn_send": "📤 Yuborish",
-        "btn_toggle": "🔄 Almashtirish",
-        
-        # Messages
-        "success": "✅ Muvaffaqiyatli",
-        "success_added": "✅ Muvaffaqiyatli qo'shildi",
-        "success_updated": "✅ Muvaffaqiyatli yangilandi",
-        "success_deleted": "✅ Muvaffaqiyatli o'chirildi",
-        "error": "❌ Xato",
-        "error_occurred": "Xatolik yuz berdi. Keyinroq urinib ko'ring.",
-        "invalid_input": "❌ Noto'g'ri kiritish",
-        "invalid_url": "❌ Noto'g'ri URL",
-        "operation_cancelled": "❌ Operatsiya bekor qilindi",
-        "not_authorized": "❌ Ruxsat yo'q",
-        "user_banned": "❌ Siz bloklangansiz",
-        "feature_disabled": "❌ Bu funksiya o'chirilgan",
+        "settings_title": "⚙️ Sozlamalar",
+        "settings_language": "🌐 Til",
+        "settings_notifications": "🔔 Xabarnomalar",
+        "settings_notifications_on": "✅ Yoqilgan",
+        "settings_notifications_off": "❌ O'chirilgan",
+        "settings_change_language": "Tilni o'zgartirish",
+        "settings_toggle_notifications": "Xabarnomalarni almashtirish",
+        "settings_notifications_enabled": "✅ Xabarnomalar yoqildi",
+        "settings_notifications_disabled": "❌ Xabarnomalar o'chirildi",
         
         # Common
-        "yes": "Ha",
-        "no": "Yo'q",
-        "all": "Hammasi",
-        "active": "Faol",
-        "inactive": "Faol emas",
-        "pending": "Kutilmoqda",
-        "approved": "Tasdiqlangan",
-        "rejected": "Rad etilgan",
-        "loading": "⏳ Yuklanmoqda...",
-        "please_wait": "⏳ Kuting...",
+        "error": "❌ Xatolik yuz berdi. Keyinroq urinib ko'ring.",
+        "cancel": "❌ Bekor qilish",
+        "cancelled": "❌ Bekor qilindi.",
+        "invalid_input": "❌ Noto'g'ri kiritish. Qayta urinib ko'ring.",
+        "banned": "❌ Sizning akkauntingiz bloklangan.",
+        "send": "✅ Yuborish",
     }
 }
 
 
-def t(key: str, language: str = "RU", **kwargs) -> str:
-    """Get translated string"""
-    text = LOCALES.get(language, LOCALES["RU"]).get(key, key)
+def t(key: str, lang: str = "RU", **kwargs) -> str:
+    """
+    Get translated string by key and language.
+    
+    Args:
+        key: Translation key (e.g., "welcome", "main_menu")
+        lang: Language code (RU or UZ)
+        **kwargs: Format parameters for string formatting
+    
+    Returns:
+        Translated and formatted string
+    """
+    lang = lang.upper() if lang else "RU"
+    if lang not in LOCALES:
+        lang = "RU"
+    
+    text = LOCALES[lang].get(key, key)
+    
     if kwargs:
         try:
             return text.format(**kwargs)
-        except KeyError:
+        except (KeyError, ValueError):
             return text
+    
     return text
