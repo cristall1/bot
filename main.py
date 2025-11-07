@@ -6,6 +6,13 @@ from bots.admin_bot import AdminBot
 from utils.logger import logger
 from config import settings
 
+# Import all models to ensure they are registered with SQLAlchemy Base
+from models import (
+    User, Category, CategoryContent, InlineButton, ServiceRequest,
+    CourierManagement, UserPreference, AdminMessage, Broadcast,
+    AdminLog, SystemSetting
+)
+
 
 async def seed_initial_data():
     """Seed initial categories and system settings"""
@@ -24,7 +31,7 @@ async def seed_initial_data():
                     categories_data = json.load(f)
                 
                 for cat_data in categories_data:
-                    await CategoryService.create_category(
+                    category = await CategoryService.create_category(
                         session,
                         name_ru=cat_data['name_ru'],
                         name_uz=cat_data['name_uz'],
@@ -33,8 +40,13 @@ async def seed_initial_data():
                         level=cat_data.get('level', 1),
                         icon=cat_data.get('icon', '📁'),
                         category_type=cat_data.get('category_type', 'GENERAL'),
-                        order_index=cat_data.get('order_index', 0)
+                        citizenship_scope=cat_data.get('citizenship_scope'),
+                        created_by_admin_id=cat_data.get('created_by_admin_id')
                     )
+                    # Set order_index separately if provided
+                    if 'order_index' in cat_data:
+                        category.order_index = cat_data['order_index']
+                        await session.commit()
                 
                 logger.info("Initial categories seeded successfully")
             except Exception as e:
@@ -93,10 +105,11 @@ async def main():
     
     logger.info("Initializing database...")
     await init_db()
-    logger.info("Database initialized")
+    logger.info("Database tables created successfully")
     
     logger.info("Seeding initial data...")
     await seed_initial_data()
+    logger.info("Initial data seeding completed")
     
     logger.info("Starting both bots...")
     
