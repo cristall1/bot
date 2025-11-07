@@ -11,7 +11,6 @@ from services.notification_service import NotificationService
 from services.shurta_service import ShurtaService
 from services.user_message_service import UserMessageService
 from services.broadcast_service import BroadcastService
-from services.courier_service import CourierService
 from services.admin_log_service import AdminLogService
 from states import AdminStates
 from utils.logger import logger
