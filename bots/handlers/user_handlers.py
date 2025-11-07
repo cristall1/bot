@@ -257,6 +257,97 @@ async def handle_delivery(message: Message):
         )
 
 
+@router.callback_query(F.data == "delivery_active")
+async def show_active_deliveries(callback: CallbackQuery):
+    """Show active delivery orders"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        # Get all active deliveries (not assigned to anyone or assigned to others)
+        deliveries = await DeliveryService.get_active_deliveries(session)
+        
+        if not deliveries:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=t("back", user.language), callback_data="back_delivery_menu")]
+            ])
+            await callback.message.edit_text(
+                t("delivery_no_active", user.language),
+                reply_markup=keyboard
+            )
+        else:
+            buttons = []
+            for delivery in deliveries:
+                btn_text = f"📦 {delivery.description[:20]}..."
+                buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"view_delivery_{delivery.id}")])
+            
+            buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data="back_delivery_menu")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            
+            await callback.message.edit_text(
+                f"{t('delivery_menu_active', user.language)}\n\n({len(deliveries)} активных)",
+                reply_markup=keyboard
+            )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("view_delivery_"))
+async def view_delivery_order(callback: CallbackQuery):
+    """View specific delivery order"""
+    delivery_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        delivery = await DeliveryService.get_delivery(session, delivery_id)
+        if not delivery:
+            await callback.answer("Заказ не найден")
+            return
+        
+        text = f"📦 Заказ #{delivery.id}\n\n"
+        text += f"📝 {delivery.description}\n"
+        text += f"📍 {delivery.location_info}\n"
+        text += f"📞 {delivery.phone}\n"
+        text += f"⏰ {delivery.created_at}\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("delivery_take", user.language), callback_data=f"take_delivery_{delivery.id}")],
+            [InlineKeyboardButton(text=t("delivery_reject", user.language), callback_data=f"reject_delivery_{delivery.id}")],
+            [InlineKeyboardButton(text=t("back", user.language), callback_data="delivery_active")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_delivery_menu")
+async def back_to_delivery_menu(callback: CallbackQuery):
+    """Back to delivery menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("delivery_menu_create", user.language), callback_data="delivery_create")],
+            [InlineKeyboardButton(text=t("delivery_menu_active", user.language), callback_data="delivery_active")],
+            [InlineKeyboardButton(text=t("delivery_menu_my_stats", user.language), callback_data="delivery_stats")],
+            [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            t("delivery_title", user.language),
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
 @router.callback_query(F.data == "delivery_create")
 async def start_delivery_creation(callback: CallbackQuery, state: FSMContext):
     """Start delivery creation"""
@@ -290,13 +381,110 @@ async def process_delivery_description(message: Message, state: FSMContext):
             return
         
         await state.update_data(description=message.text)
-        await message.answer(t("delivery_create_location", user.language))
-        await state.set_state(UserStates.delivery_location)
+        
+        # Show location choice options
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("delivery_location_text", user.language), callback_data="delivery_loc_text")],
+            [InlineKeyboardButton(text=t("delivery_location_geo", user.language), callback_data="delivery_loc_geo")],
+            [InlineKeyboardButton(text=t("delivery_location_maps", user.language), callback_data="delivery_loc_maps")]
+        ])
+        
+        await message.answer(t("delivery_location_choice", user.language), reply_markup=keyboard)
+        await state.set_state(UserStates.delivery_location_choice)
+
+
+@router.callback_query(F.data == "delivery_loc_text")
+async def delivery_location_text(callback: CallbackQuery, state: FSMContext):
+    """Get text location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "📍 Введите адрес (район/улица):",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.delivery_location_text)
+    await callback.answer()
+
+
+@router.message(UserStates.delivery_location_text)
+async def process_delivery_location_text(message: Message, state: FSMContext):
+    """Process text location"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="text")
+        await message.answer(t("delivery_create_phone", user.language))
+        await state.set_state(UserStates.delivery_phone)
+
+
+@router.callback_query(F.data == "delivery_loc_geo")
+async def delivery_location_geo(callback: CallbackQuery, state: FSMContext):
+    """Get geolocation"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📍 Отправить локацию", request_location=True)]],
+            resize_keyboard=True
+        )
+        await callback.message.answer("Отправьте вашу геолокацию:", reply_markup=keyboard)
+        await state.set_state(UserStates.delivery_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.delivery_location_maps, F.location)
+async def process_delivery_location_geo(message: Message, state: FSMContext):
+    """Process geolocation"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        location_str = f"{message.location.latitude},{message.location.longitude}"
+        await state.update_data(location=location_str, location_type="geo")
+        await message.answer(t("delivery_create_phone", user.language))
+        await state.set_state(UserStates.delivery_phone)
+
+
+@router.callback_query(F.data == "delivery_loc_maps")
+async def delivery_location_maps(callback: CallbackQuery, state: FSMContext):
+    """Get Google Maps link"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "🗺 Введите Google Maps ссылку:",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.delivery_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.delivery_location_maps, ~F.location)
+async def process_delivery_location_maps(message: Message, state: FSMContext):
+    """Process Google Maps link"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="maps")
+        await message.answer(t("delivery_create_phone", user.language))
+        await state.set_state(UserStates.delivery_phone)
 
 
 @router.message(UserStates.delivery_location)
 async def process_delivery_location(message: Message, state: FSMContext):
-    """Process delivery location"""
+    """Process delivery location (deprecated, kept for compatibility)"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user:
@@ -378,14 +566,15 @@ async def take_delivery(callback: CallbackQuery):
             await callback.answer(t("delivery_already_taken", user.language), show_alert=True)
             return
         
-        # Notify creator
+        # Notify creator with courier contact info
         creator = await UserService.get_user_by_id(session, delivery.creator_id)
         if creator:
             try:
-                await callback.bot.send_message(
-                    creator.telegram_id,
-                    t("delivery_accepted", creator.language)
-                )
+                msg_text = t("delivery_accepted", creator.language)
+                msg_text += f"\n\n👤 Курьер: @{user.username or user.first_name}"
+                msg_text += f"\n📞 Телефон: {user.phone if user.phone else 'Не указан'}"
+                
+                await callback.bot.send_message(creator.telegram_id, msg_text)
             except Exception as e:
                 logger.error(f"Failed to notify creator: {e}")
         
@@ -615,15 +804,114 @@ async def process_lost_person_photo(message: Message, state: FSMContext):
         photo_url = None
         if message.photo:
             photo_url = message.photo[-1].file_id
+        elif message.text != t("notifications_skip_photo", user.language):
+            photo_url = None
         
         await state.update_data(photo_url=photo_url)
-        await message.answer(t("notifications_lost_person_location", user.language))
-        await state.set_state(UserStates.notification_person_location)
+        
+        # Show location choice options
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("notifications_location_text", user.language), callback_data="notif_person_loc_text")],
+            [InlineKeyboardButton(text=t("notifications_location_geo", user.language), callback_data="notif_person_loc_geo")],
+            [InlineKeyboardButton(text=t("notifications_location_maps", user.language), callback_data="notif_person_loc_maps")]
+        ])
+        
+        await message.answer(t("notifications_location_choice", user.language), reply_markup=keyboard)
+        await state.set_state(UserStates.notification_person_location_choice)
+
+
+@router.callback_query(F.data == "notif_person_loc_text")
+async def notif_person_location_text(callback: CallbackQuery, state: FSMContext):
+    """Get text location for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "📍 Введите адрес (район/улица):",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_person_location_text)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_person_location_text)
+async def process_notif_person_location_text(message: Message, state: FSMContext):
+    """Process text location for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="text")
+        await message.answer(t("notifications_lost_person_phone", user.language))
+        await state.set_state(UserStates.notification_person_phone)
+
+
+@router.callback_query(F.data == "notif_person_loc_geo")
+async def notif_person_location_geo(callback: CallbackQuery, state: FSMContext):
+    """Get geolocation for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📍 Отправить локацию", request_location=True)]],
+            resize_keyboard=True
+        )
+        await callback.message.answer("Отправьте геолокацию:", reply_markup=keyboard)
+        await state.set_state(UserStates.notification_person_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_person_location_maps, F.location)
+async def process_notif_person_location_geo(message: Message, state: FSMContext):
+    """Process geolocation for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        location_str = f"{message.location.latitude},{message.location.longitude}"
+        await state.update_data(location=location_str, location_type="geo")
+        await message.answer(t("notifications_lost_person_phone", user.language))
+        await state.set_state(UserStates.notification_person_phone)
+
+
+@router.callback_query(F.data == "notif_person_loc_maps")
+async def notif_person_location_maps(callback: CallbackQuery, state: FSMContext):
+    """Get Google Maps link for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "🗺 Введите Google Maps ссылку:",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_person_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_person_location_maps, ~F.location)
+async def process_notif_person_location_maps(message: Message, state: FSMContext):
+    """Process Google Maps link for lost person"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="maps")
+        await message.answer(t("notifications_lost_person_phone", user.language))
+        await state.set_state(UserStates.notification_person_phone)
 
 
 @router.message(UserStates.notification_person_location)
 async def process_lost_person_location(message: Message, state: FSMContext):
-    """Process lost person location"""
+    """Process lost person location (deprecated, kept for compatibility)"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user:
@@ -746,15 +1034,114 @@ async def process_lost_item_photo(message: Message, state: FSMContext):
         photo_url = None
         if message.photo:
             photo_url = message.photo[-1].file_id
+        elif message.text != t("notifications_skip_photo", user.language):
+            photo_url = None
         
         await state.update_data(photo_url=photo_url)
-        await message.answer(t("notifications_lost_item_location", user.language))
-        await state.set_state(UserStates.notification_item_location)
+        
+        # Show location choice options
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("notifications_location_text", user.language), callback_data="notif_item_loc_text")],
+            [InlineKeyboardButton(text=t("notifications_location_geo", user.language), callback_data="notif_item_loc_geo")],
+            [InlineKeyboardButton(text=t("notifications_location_maps", user.language), callback_data="notif_item_loc_maps")]
+        ])
+        
+        await message.answer(t("notifications_location_choice", user.language), reply_markup=keyboard)
+        await state.set_state(UserStates.notification_item_location_choice)
+
+
+@router.callback_query(F.data == "notif_item_loc_text")
+async def notif_item_location_text(callback: CallbackQuery, state: FSMContext):
+    """Get text location for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "📍 Введите адрес (район/улица):",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_item_location_text)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_item_location_text)
+async def process_notif_item_location_text(message: Message, state: FSMContext):
+    """Process text location for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="text")
+        await message.answer(t("notifications_lost_item_phone", user.language))
+        await state.set_state(UserStates.notification_item_phone)
+
+
+@router.callback_query(F.data == "notif_item_loc_geo")
+async def notif_item_location_geo(callback: CallbackQuery, state: FSMContext):
+    """Get geolocation for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📍 Отправить локацию", request_location=True)]],
+            resize_keyboard=True
+        )
+        await callback.message.answer("Отправьте геолокацию:", reply_markup=keyboard)
+        await state.set_state(UserStates.notification_item_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_item_location_maps, F.location)
+async def process_notif_item_location_geo(message: Message, state: FSMContext):
+    """Process geolocation for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        location_str = f"{message.location.latitude},{message.location.longitude}"
+        await state.update_data(location=location_str, location_type="geo")
+        await message.answer(t("notifications_lost_item_phone", user.language))
+        await state.set_state(UserStates.notification_item_phone)
+
+
+@router.callback_query(F.data == "notif_item_loc_maps")
+async def notif_item_location_maps(callback: CallbackQuery, state: FSMContext):
+    """Get Google Maps link for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(
+            "🗺 Введите Google Maps ссылку:",
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.notification_item_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.notification_item_location_maps, ~F.location)
+async def process_notif_item_location_maps(message: Message, state: FSMContext):
+    """Process Google Maps link for lost item"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location=message.text, location_type="maps")
+        await message.answer(t("notifications_lost_item_phone", user.language))
+        await state.set_state(UserStates.notification_item_phone)
 
 
 @router.message(UserStates.notification_item_location)
 async def process_lost_item_location(message: Message, state: FSMContext):
-    """Process lost item location"""
+    """Process lost item location (deprecated, kept for compatibility)"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         if not user:
