@@ -1,0 +1,37 @@
+[
+  {
+    "service_type": "COURIER",
+    "name_ru": "Курьерские услуги",
+    "name_uz": "Kuryer xizmatlari",
+    "description_ru": "Доставка посылок в Каире",
+    "description_uz": "Qohirada pochtalarni yetkazib berish"
+  },
+  {
+    "service_type": "TUTORING",
+    "name_ru": "Репетиторство",
+    "name_uz": "Repetitorlik",
+    "description_ru": "Помощь в учёбе, репетиторство по предметам",
+    "description_uz": "O'qishda yordam, fanlar bo'yicha repetitorlik"
+  },
+  {
+    "service_type": "ACCOMMODATION",
+    "name_ru": "Жильё",
+    "name_uz": "Turar joy",
+    "description_ru": "Поиск и аренда жилья",
+    "description_uz": "Uy qidirish va ijaraga olish"
+  },
+  {
+    "service_type": "TRANSLATION",
+    "name_ru": "Перевод",
+    "name_uz": "Tarjima",
+    "description_ru": "Переводческие услуги",
+    "description_uz": "Tarjima xizmatlari"
+  },
+  {
+    "service_type": "LEGAL",
+    "name_ru": "Юридические услуги",
+    "name_uz": "Yuridik xizmatlar",
+    "description_ru": "Юридическая помощь и консультации",
+    "description_uz": "Yuridik yordam va maslahatlar"
+  }
+]

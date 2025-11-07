@@ -1,0 +1,32 @@
+[
+  {
+    "name_ru": "Dirassa",
+    "name_uz": "Dirassa",
+    "description_ru": "Информация об учёбе в Dirassa",
+    "description_uz": "Dirassa da o'qish haqida ma'lumot",
+    "level": 1,
+    "icon": "📚",
+    "category_type": "DIRASSA",
+    "order_index": 1
+  },
+  {
+    "name_ru": "Al-Azhar",
+    "name_uz": "Al-Azhar",
+    "description_ru": "Информация об учёбе в Al-Azhar",
+    "description_uz": "Al-Azhar da o'qish haqida ma'lumot",
+    "level": 1,
+    "icon": "🕌",
+    "category_type": "ALAZHAR",
+    "order_index": 2
+  },
+  {
+    "name_ru": "Общая информация",
+    "name_uz": "Umumiy ma'lumot",
+    "description_ru": "Общая информация для студентов",
+    "description_uz": "Talabalar uchun umumiy ma'lumot",
+    "level": 1,
+    "icon": "ℹ️",
+    "category_type": "GENERAL",
+    "order_index": 3
+  }
+]
