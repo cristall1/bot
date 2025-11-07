@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from models import Document, DocumentButton
@@ -16,7 +16,10 @@ class DocumentService:
         name_uz: str,
         content_ru: str = None,
         content_uz: str = None,
-        photo_url: str = None,
+        content_type: str = "TEXT",
+        photo_file_id: str = None,
+        pdf_file_id: str = None,
+        audio_file_id: str = None,
         telegraph_url: str = None,
         order_index: int = 0
     ) -> Document:
@@ -27,7 +30,10 @@ class DocumentService:
             name_uz=name_uz,
             content_ru=content_ru,
             content_uz=content_uz,
-            photo_url=photo_url,
+            content_type=content_type,
+            photo_file_id=photo_file_id,
+            pdf_file_id=pdf_file_id,
+            audio_file_id=audio_file_id,
             telegraph_url=telegraph_url,
             order_index=order_index
         )
@@ -51,11 +57,11 @@ class DocumentService:
         citizenship_scope: str,
         active_only: bool = True
     ) -> List[Document]:
-        """Get all documents for specific citizenship"""
+        """Get all documents for specific citizenship (always fresh query)"""
         query = select(Document).where(Document.citizenship_scope == citizenship_scope)
         
         if active_only:
-            query = query.where(Document.is_active == True)
+            query = query.where(Document.is_active == True, Document.deleted_at.is_(None))
         
         query = query.order_by(Document.order_index)
         
@@ -83,7 +89,10 @@ class DocumentService:
         name_uz: str = None,
         content_ru: str = None,
         content_uz: str = None,
-        photo_url: str = None,
+        content_type: str = None,
+        photo_file_id: str = None,
+        pdf_file_id: str = None,
+        audio_file_id: str = None,
         telegraph_url: str = None,
         order_index: int = None
     ) -> Optional[Document]:
@@ -100,8 +109,14 @@ class DocumentService:
             document.content_ru = content_ru
         if content_uz is not None:
             document.content_uz = content_uz
-        if photo_url is not None:
-            document.photo_url = photo_url
+        if content_type is not None:
+            document.content_type = content_type
+        if photo_file_id is not None:
+            document.photo_file_id = photo_file_id
+        if pdf_file_id is not None:
+            document.pdf_file_id = pdf_file_id
+        if audio_file_id is not None:
+            document.audio_file_id = audio_file_id
         if telegraph_url is not None:
             document.telegraph_url = telegraph_url
         if order_index is not None:
@@ -119,6 +134,8 @@ class DocumentService:
         if not document:
             return False
         
+        from datetime import datetime
+        document.deleted_at = datetime.utcnow()
         document.is_active = False
         await session.commit()
         logger.info(f"Document deleted: {document_id}")
@@ -130,7 +147,9 @@ class DocumentService:
         document_id: int,
         text_ru: str,
         text_uz: str,
-        url: str,
+        button_type: str = "LINK",
+        button_value: str = None,
+        button_interface: dict = None,
         order_index: int = 0
     ) -> Optional[DocumentButton]:
         """Add button to document"""
@@ -142,7 +161,9 @@ class DocumentService:
             document_id=document_id,
             text_ru=text_ru,
             text_uz=text_uz,
-            url=url,
+            button_type=button_type,
+            button_value=button_value or "",
+            button_interface=button_interface,
             order_index=order_index
         )
         session.add(button)

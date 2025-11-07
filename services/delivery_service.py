@@ -1,7 +1,7 @@
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from models import Delivery, User, Courier
 from utils.logger import logger
 
@@ -14,16 +14,27 @@ class DeliveryService:
         session: AsyncSession,
         creator_id: int,
         description: str,
-        location_info: str,
-        phone: str
+        location_type: str,
+        address_text: str = None,
+        latitude: float = None,
+        longitude: float = None,
+        geo_name: str = None,
+        maps_url: str = None,
+        phone: str = None
     ) -> Delivery:
         """Create new delivery order"""
         delivery = Delivery(
             creator_id=creator_id,
             description=description,
-            location_info=location_info,
+            location_type=location_type,
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            geo_name=geo_name,
+            maps_url=maps_url,
             phone=phone,
-            status="WAITING"
+            status="WAITING",
+            expires_at=datetime.utcnow() + timedelta(hours=24)  # Auto-expire after 24 hours
         )
         session.add(delivery)
         await session.commit()
@@ -41,9 +52,11 @@ class DeliveryService:
     
     @staticmethod
     async def get_active_deliveries(session: AsyncSession) -> List[Delivery]:
-        """Get all waiting deliveries"""
+        """Get all waiting deliveries (not expired)"""
         query = select(Delivery).where(
-            Delivery.status == "WAITING"
+            Delivery.status == "WAITING",
+            Delivery.is_active == True,
+            Delivery.expires_at > datetime.utcnow()  # Not expired
         ).order_by(Delivery.created_at.desc())
         
         result = await session.execute(query)

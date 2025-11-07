@@ -1,6 +1,7 @@
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+from datetime import datetime, timedelta
 from models import Notification
 from utils.logger import logger
 
@@ -15,24 +16,37 @@ class NotificationService:
         creator_id: int,
         title: str,
         description: str,
-        location: str,
-        phone: str,
-        photo_url: str = None
+        location_type: str,
+        address_text: str = None,
+        latitude: float = None,
+        longitude: float = None,
+        geo_name: str = None,
+        maps_url: str = None,
+        phone: str = None,
+        photo_file_id: str = None
     ) -> Notification:
-        """Create new notification"""
+        """Create new notification (requires admin approval)"""
         notification = Notification(
             type=notification_type,
             creator_id=creator_id,
             title=title,
             description=description,
-            location=location,
+            location_type=location_type,
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            geo_name=geo_name,
+            maps_url=maps_url,
             phone=phone,
-            photo_url=photo_url
+            photo_file_id=photo_file_id,
+            is_approved=False,  # Requires admin approval
+            is_moderated=False,
+            expires_at=datetime.utcnow() + timedelta(hours=48)  # Auto-expire after 48 hours
         )
         session.add(notification)
         await session.commit()
         await session.refresh(notification)
-        logger.info(f"Notification created: {notification_type} by user {creator_id}")
+        logger.info(f"Notification created: {notification_type} by user {creator_id} (pending approval)")
         return notification
     
     @staticmethod
@@ -48,8 +62,13 @@ class NotificationService:
         session: AsyncSession,
         notification_type: str = None
     ) -> List[Notification]:
-        """Get all active notifications"""
-        query = select(Notification).where(Notification.is_active == True)
+        """Get all active and approved notifications"""
+        query = select(Notification).where(
+            Notification.is_active == True,
+            Notification.is_approved == True,
+            Notification.is_moderated == True,
+            Notification.expires_at > datetime.utcnow()  # Not expired
+        )
         
         if notification_type:
             query = query.where(Notification.type == notification_type)
@@ -58,6 +77,68 @@ class NotificationService:
         
         result = await session.execute(query)
         return result.scalars().all()
+    
+    @staticmethod
+    async def get_pending_notifications(
+        session: AsyncSession,
+        notification_type: str = None
+    ) -> List[Notification]:
+        """Get notifications pending admin approval"""
+        query = select(Notification).where(
+            Notification.is_active == True,
+            Notification.is_approved == False,
+            Notification.is_moderated == False
+        )
+        
+        if notification_type:
+            query = query.where(Notification.type == notification_type)
+        
+        query = query.order_by(Notification.created_at.asc())
+        
+        result = await session.execute(query)
+        return result.scalars().all()
+    
+    @staticmethod
+    async def approve_notification(
+        session: AsyncSession,
+        notification_id: int,
+        moderator_id: int
+    ) -> Optional[Notification]:
+        """Approve notification (admin action)"""
+        notification = await NotificationService.get_notification(session, notification_id)
+        if not notification:
+            return None
+        
+        notification.is_approved = True
+        notification.is_moderated = True
+        notification.moderator_id = moderator_id
+        notification.moderated_at = datetime.utcnow()
+        
+        await session.commit()
+        await session.refresh(notification)
+        logger.info(f"Notification {notification_id} approved by admin {moderator_id}")
+        return notification
+    
+    @staticmethod
+    async def reject_notification(
+        session: AsyncSession,
+        notification_id: int,
+        moderator_id: int
+    ) -> Optional[Notification]:
+        """Reject notification (admin action)"""
+        notification = await NotificationService.get_notification(session, notification_id)
+        if not notification:
+            return None
+        
+        notification.is_approved = False
+        notification.is_moderated = True
+        notification.moderator_id = moderator_id
+        notification.moderated_at = datetime.utcnow()
+        
+        await session.commit()
+        await session.refresh(notification)
+        logger.info(f"Notification {notification_id} rejected by admin {moderator_id}")
+        return notification
     
     @staticmethod
     async def get_user_notifications(
