@@ -8,31 +8,41 @@ class UserStates(StatesGroup):
     
     # Delivery creation states
     delivery_description = State()
-    delivery_location = State()
+    delivery_location_choice = State()
+    delivery_location_text = State()
+    delivery_location_maps = State()
     delivery_phone = State()
     
     # Notification (lost person) states
     notification_person_name = State()
     notification_person_desc = State()
     notification_person_photo = State()
-    notification_person_location = State()
+    notification_person_location_choice = State()
+    notification_person_location_text = State()
+    notification_person_location_maps = State()
     notification_person_phone = State()
     
     # Notification (lost item) states
     notification_item_what = State()
     notification_item_desc = State()
     notification_item_photo = State()
-    notification_item_location = State()
+    notification_item_location_choice = State()
+    notification_item_location_text = State()
+    notification_item_location_maps = State()
     notification_item_phone = State()
     
     # Shurta (police) states
     shurta_description = State()
     shurta_location_choice = State()
-    shurta_location_input = State()
+    shurta_location_text = State()
+    shurta_location_maps = State()
     shurta_photo = State()
     
     # Admin contact
     admin_contact_message = State()
+    
+    # Viewing active orders
+    viewing_active_orders = State()
 
 
 class AdminStates(StatesGroup):
