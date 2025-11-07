@@ -4,11 +4,21 @@ from config import settings
 
 Base = declarative_base()
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    future=True
-)
+# Add SQLite-specific connection arguments for better compatibility
+connect_args = {"check_same_thread": False}
+if "sqlite" in settings.database_url:
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        future=True,
+        connect_args=connect_args
+    )
+else:
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        future=True
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
@@ -20,8 +30,13 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def init_db():
+    """Initialize database tables - ensure all models are imported first"""
     async with engine.begin() as conn:
+        # Create all tables defined in models that inherit from Base
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Log all tables that were created
+        await conn.run_sync(lambda sync_conn: print(f"Created tables: {list(Base.metadata.tables.keys())}"))
 
 
 async def get_session() -> AsyncSession:
