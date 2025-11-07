@@ -9,6 +9,7 @@ class UserStates(StatesGroup):
     # Language & Citizenship selection
     waiting_language = State()
     waiting_citizenship = State()
+    selecting_language = State()
     
     # Documents (Hujjat yordami)
     viewing_documents = State()
@@ -19,6 +20,8 @@ class UserStates(StatesGroup):
     delivery_menu = State()
     creating_delivery = State()
     delivery_description = State()
+    delivery_location = State()  # Deprecated, kept for compatibility
+    delivery_location_choice = State()  # Choose: text, geo, maps
     delivery_location_type = State()  # Choose: address, geo, maps
     delivery_location_text = State()  # For text address
     delivery_location_geo = State()   # For geolocation
@@ -51,8 +54,31 @@ class UserStates(StatesGroup):
     propaja_narsa_phone = State()
     propaja_narsa_photo = State()
     
+    # Notifications (Legacy naming - used in handlers)
+    notification_person_name = State()
+    notification_person_desc = State()
+    notification_person_photo = State()
+    notification_person_location = State()  # Deprecated, kept for compatibility
+    notification_person_location_choice = State()  # Choose: text, geo, maps
+    notification_person_location_text = State()
+    notification_person_location_geo = State()
+    notification_person_location_maps = State()
+    notification_person_phone = State()
+    
+    notification_item_what = State()
+    notification_item_desc = State()
+    notification_item_photo = State()
+    notification_item_location = State()  # Deprecated, kept for compatibility
+    notification_item_location_choice = State()  # Choose: text, geo, maps
+    notification_item_location_text = State()
+    notification_item_location_geo = State()
+    notification_item_location_maps = State()
+    notification_item_phone = State()
+    
     # Shurta (Полиция)
     shurta_description = State()
+    shurta_location_choice = State()  # Choose: text, geo, maps
+    shurta_location_input = State()  # For text address input
     shurta_location_type = State()  # Choose: address, geo, maps
     shurta_location_text = State()
     shurta_location_geo = State()
@@ -61,6 +87,7 @@ class UserStates(StatesGroup):
     
     # Admin message
     admin_message = State()
+    admin_contact_message = State()
     
     # Settings
     settings_menu = State()
