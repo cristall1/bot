@@ -40,12 +40,16 @@ class Document(Base):
     name_uz = Column(String(255), nullable=False)
     content_ru = Column(Text, nullable=True)
     content_uz = Column(Text, nullable=True)
-    photo_url = Column(String(500), nullable=True)  # Telegram file_id
+    content_type = Column(String(20), default="TEXT")  # TEXT, PHOTO, PDF, AUDIO, LINK, GEO
+    photo_file_id = Column(String(500), nullable=True)  # Telegram file_id
+    pdf_file_id = Column(String(500), nullable=True)   # Telegram file_id
+    audio_file_id = Column(String(500), nullable=True)  # Telegram file_id
     telegraph_url = Column(String(500), nullable=True)
     order_index = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)  # Soft delete
 
     # Relationships
     buttons = relationship("DocumentButton", back_populates="document", cascade="all, delete-orphan")
@@ -59,7 +63,9 @@ class DocumentButton(Base):
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     text_ru = Column(String(255), nullable=False)
     text_uz = Column(String(255), nullable=False)
-    url = Column(String(500), nullable=False)
+    button_type = Column(String(20), default="LINK")  # LINK, CALLBACK, PHOTO, PDF, AUDIO, GEO
+    button_value = Column(String(500), nullable=False)  # URL, callback_data, file_id, coordinates
+    button_interface = Column(JSON, nullable=True)  # Additional interface data
     order_index = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -76,12 +82,19 @@ class Delivery(Base):
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     courier_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     description = Column(Text, nullable=False)
-    location_info = Column(String(500), nullable=False)  # From where to where
+    location_type = Column(String(20), nullable=False)  # ADDRESS, GEO, MAPS
+    address_text = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)  # Readable location name
+    maps_url = Column(String(500), nullable=True)  # Google Maps URL
     phone = Column(String(50), nullable=False)
     status = Column(String(20), default="WAITING")  # WAITING, ASSIGNED, COMPLETED, REJECTED, CANCELLED
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     assigned_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # Auto-expiration
 
     # Relationships
     creator = relationship("User", foreign_keys=[creator_id], back_populates="deliveries_created")
@@ -97,11 +110,21 @@ class Notification(Base):
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)  # Name or What
     description = Column(Text, nullable=False)
-    photo_url = Column(String(500), nullable=True)
-    location = Column(String(500), nullable=False)
+    photo_file_id = Column(String(500), nullable=True)
+    location_type = Column(String(20), nullable=False)  # ADDRESS, GEO, MAPS
+    address_text = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)  # Readable location name
+    maps_url = Column(String(500), nullable=True)  # Google Maps URL
     phone = Column(String(50), nullable=False)
+    is_approved = Column(Boolean, default=False)  # Admin approval required
+    is_moderated = Column(Boolean, default=False)  # Has been reviewed by admin
+    moderator_id = Column(Integer, nullable=True)  # Admin who moderated
+    moderated_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # Auto-expiration after 48 hours
 
     # Relationships
     creator = relationship("User", back_populates="notifications_created")
@@ -114,12 +137,20 @@ class ShurtaAlert(Base):
     id = Column(Integer, primary_key=True, index=True)
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     description = Column(Text, nullable=False)
-    location_info = Column(String(500), nullable=False)  # Google Maps / Geo / Text address
-    google_maps_url = Column(String(500), nullable=True)
-    coordinates = Column(String(100), nullable=True)  # lat,lon
-    photo_url = Column(String(500), nullable=True)
+    location_type = Column(String(20), nullable=False)  # ADDRESS, GEO, MAPS
+    address_text = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)  # Readable location name
+    maps_url = Column(String(500), nullable=True)  # Google Maps URL
+    photo_file_id = Column(String(500), nullable=True)
+    is_approved = Column(Boolean, default=False)  # Admin approval required
+    is_moderated = Column(Boolean, default=False)  # Has been reviewed by admin
+    moderator_id = Column(Integer, nullable=True)  # Admin who moderated
+    moderated_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # Auto-expiration after 48 hours
 
     # Relationships
     creator = relationship("User", back_populates="shurta_alerts")
@@ -133,6 +164,9 @@ class UserMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     message_text = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
+    is_moderated = Column(Boolean, default=False)  # For moderation if needed
+    moderator_id = Column(Integer, nullable=True)
+    moderation_status = Column(String(20), default="PENDING")  # PENDING, APPROVED, REJECTED
     admin_reply = Column(Text, nullable=True)
     admin_id = Column(Integer, nullable=True)
     replied_at = Column(DateTime, nullable=True)
@@ -148,12 +182,16 @@ class Broadcast(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     admin_id = Column(Integer, nullable=False)
+    name_ru = Column(String(255), nullable=False)  # Campaign name
+    name_uz = Column(String(255), nullable=False)  # Campaign name
     message_ru = Column(Text, nullable=False)
     message_uz = Column(Text, nullable=True)
-    photo_url = Column(String(500), nullable=True)
+    photo_file_id = Column(String(500), nullable=True)
     recipient_filter = Column(String(50), default="ALL")  # ALL, RU, UZ, COURIERS, CITIZENSHIP_UZ, etc
-    sent_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime, nullable=True)
     recipient_count = Column(Integer, default=0)
+    is_sent = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class TelegraphArticle(Base):
