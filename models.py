@@ -28,6 +28,8 @@ class User(Base):
     shurta_alerts = relationship("ShurtaAlert", back_populates="creator")
     user_messages = relationship("UserMessage", back_populates="user")
     courier_info = relationship("Courier", back_populates="user", uselist=False)
+    activities = relationship("UserActivity", back_populates="user")
+    button_clicks = relationship("ButtonClick", back_populates="user")
 
 
 class Document(Base):
@@ -248,3 +250,31 @@ class AdminLog(Base):
     entity_id = Column(Integer, nullable=True)
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserActivity(Base):
+    """Отслеживание активности пользователей для статистики"""
+    __tablename__ = "user_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    activity_type = Column(String(50), nullable=False)  # BUTTON_CLICK, MESSAGE_SENT, etc
+    activity_data = Column(JSON, nullable=True)  # Дополнительные метаданные
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="activities")
+
+
+class ButtonClick(Base):
+    """Отслеживание кликов по кнопкам для статистики"""
+    __tablename__ = "button_clicks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    button_name = Column(String(255), nullable=False)  # Текст кнопки или идентификатор
+    category = Column(String(100), nullable=True)  # Категория если применимо
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="button_clicks")
