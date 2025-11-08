@@ -22,6 +22,8 @@ from services.user_message_service import UserMessageService
 from services.broadcast_service import BroadcastService
 from services.admin_log_service import AdminLogService
 from services.courier_service import CourierService
+from services.statistics_service import StatisticsService
+from services.moderation_service import ModerationService
 from states import AdminStates
 from utils.logger import logger
 from sqlalchemy import select, func
@@ -780,35 +782,57 @@ async def view_notification_detail(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("admin_notif_approve_"))
 async def approve_notification(callback: CallbackQuery):
     """Одобрить уведомление"""
-    notif_id = int(callback.data.split("_")[-1])
-    admin_id = callback.from_user.id
-    
-    async with AsyncSessionLocal() as session:
-        notification = await NotificationService.approve_notification(session, notif_id, admin_id)
-        if notification:
-            await callback.answer("✅ Уведомление одобрено", show_alert=True)
-        else:
-            await callback.answer("❌ Ошибка при одобрении", show_alert=True)
-    
-    await callback.message.edit_text("✅ Уведомление одобрено")
-    await callback.answer()
+    try:
+        logger.info(f"Админ {callback.from_user.id} одобряет уведомление")
+        notif_id = int(callback.data.split("_")[-1])
+        admin_id = callback.from_user.id
+        
+        async with AsyncSessionLocal() as session:
+            notification = await ModerationService.approve_notification(session, notif_id, admin_id)
+            if notification:
+                # Получить список пользователей для рассылки
+                users = await ModerationService.get_users_for_notification(
+                    session,
+                    notification.type
+                )
+                recipients_count = len(users)
+                
+                logger.info(f"Уведомление одобрено, рассылка {recipients_count} пользователям")
+                await callback.message.edit_text(
+                    f"✅ Уведомление одобрено и отправлено {recipients_count} пользователям"
+                )
+                await callback.answer(
+                    f"✅ Уведомление отправлено {recipients_count} пользователям",
+                    show_alert=True
+                )
+            else:
+                logger.error(f"Не удалось одобрить уведомление {notif_id}")
+                await callback.answer("❌ Ошибка при одобрении", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка при одобрении уведомления: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_notif_reject_"))
 async def reject_notification(callback: CallbackQuery):
     """Отклонить уведомление"""
-    notif_id = int(callback.data.split("_")[-1])
-    admin_id = callback.from_user.id
-    
-    async with AsyncSessionLocal() as session:
-        notification = await NotificationService.reject_notification(session, notif_id, admin_id)
-        if notification:
-            await callback.answer("✅ Уведомление отклонено", show_alert=True)
-        else:
-            await callback.answer("❌ Ошибка при отклонении", show_alert=True)
-    
-    await callback.message.edit_text("✅ Уведомление отклонено")
-    await callback.answer()
+    try:
+        logger.info(f"Админ {callback.from_user.id} отклоняет уведомление")
+        notif_id = int(callback.data.split("_")[-1])
+        admin_id = callback.from_user.id
+        
+        async with AsyncSessionLocal() as session:
+            notification = await ModerationService.reject_notification(session, notif_id, admin_id)
+            if notification:
+                logger.info(f"Уведомление {notif_id} отклонено")
+                await callback.message.edit_text("✅ Уведомление отклонено")
+                await callback.answer("✅ Уведомление отклонено", show_alert=True)
+            else:
+                logger.error(f"Не удалось отклонить уведомление {notif_id}")
+                await callback.answer("❌ Ошибка при отклонении", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка при отклонении уведомления: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 @router.callback_query(F.data == "admin_notif_approved")
@@ -1625,50 +1649,53 @@ async def show_broadcast_history(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_stats_menu")
 async def handle_statistics_menu(callback: CallbackQuery, state: FSMContext):
     """Меню статистики"""
-    await state.clear()
-    
-    async with AsyncSessionLocal() as session:
-        # User statistics
-        total_users = await session.execute(select(func.count(User.id)))
-        total = total_users.scalar() or 0
+    try:
+        logger.info(f"Админ {callback.from_user.id} просматривает статистику")
+        await state.clear()
         
-        active_today = await session.execute(
-            select(func.count(User.id)).where(User.last_active != None)
-        )
-        active = active_today.scalar() or 0
+        async with AsyncSessionLocal() as session:
+            user_stats = await StatisticsService.get_user_statistics(session)
+            button_stats = await StatisticsService.get_button_statistics(session, days=30)
+            peak_hours = await StatisticsService.get_peak_hours(session, days=30)
+            moderation_stats = await StatisticsService.get_moderation_queue_count(session)
         
-        ru_users = await session.execute(
-            select(func.count(User.id)).where(User.language == "RU")
-        )
-        ru_count = ru_users.scalar() or 0
+        # Формирование блоков статистики
+        language_map = {"RU": "🇷🇺 Русский", "UZ": "🇺🇿 Узбекский"}
+        citizenship_map = {"UZ": "🇺🇿 Узбекистан", "RU": "🇷🇺 Россия", "KZ": "🇰🇿 Казахстан", "KG": "🇰🇬 Киргизия"}
         
-        uz_users = await session.execute(
-            select(func.count(User.id)).where(User.language == "UZ")
-        )
-        uz_count = uz_users.scalar() or 0
-        
-        couriers = await session.execute(
-            select(func.count(User.id)).where(User.is_courier == True)
-        )
-        courier_count = couriers.scalar() or 0
+        language_lines = [f"{language_map.get(c, c)}: {cnt}" for c, cnt in user_stats.get("language_stats", {}).items()]
+        citizenship_lines = [f"{citizenship_map.get(c, c)}: {cnt}" for c, cnt in user_stats.get("citizenship_stats", {}).items()]
+        button_lines = [f"{i}. {name} — {clicks} нажатий" for i, (name, clicks) in enumerate(button_stats.items(), 1)]
+        peak_lines = [f"{tr} → {val} пользователей" for tr, val in peak_hours.items()]
         
         stats_text = (
-            "📊 СТАТИСТИКА\n"
+            "📊 ОБЩАЯ СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ\n"
             "═══════════════════════════════════════\n\n"
-            f"👥 Пользователей: {total}\n"
-            f"🟢 Активных: {active}\n"
-            f"🇷🇺 Русскоговорящих: {ru_count}\n"
-            f"🇺🇿 Узбекоговорящих: {uz_count}\n"
-            f"🚗 Курьеры: {courier_count}"
+            f"👥 Всего пользователей: {user_stats.get('total_users', 0)}\n"
+            f"🚀 Активных сегодня: {user_stats.get('active_today', 0)}\n"
+            f"🔄 Активных за неделю: {user_stats.get('active_week', 0)}\n"
+            f"📱 Новых за неделю: {user_stats.get('new_week', 0)}\n\n"
+            "📊 ТОП 5 КНОПОК:\n" + ("\n".join(button_lines) if button_lines else "—") + "\n\n"
+            "⏰ ПИКОВЫЕ ЧАСЫ:\n" + ("\n".join(peak_lines) if peak_lines else "—") + "\n\n"
+            "🌍 ПО ЯЗЫКАМ:\n" + ("\n".join(language_lines) if language_lines else "—") + "\n\n"
+            "🏠 ПО ГРАЖДАНСТВУ:\n" + ("\n".join(citizenship_lines) if citizenship_lines else "—") + "\n\n"
+            f"🚗 Курьеры: {user_stats.get('couriers_count', 0)}\n\n"
+            "🛡️ МОДЕРАЦИЯ:\n"
+            f"— Потери в очереди: {moderation_stats.get('notifications_pending', 0)}\n"
+            f"— Shurta в очереди: {moderation_stats.get('shurta_pending', 0)}\n"
+            f"— Сообщений без ответа: {moderation_stats.get('messages_unread', 0)}"
         )
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stats_menu")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
         ])
         
         await callback.message.edit_text(stats_text, reply_markup=keyboard)
-    
-    await callback.answer()
+        await callback.answer("✅ Статистика обновлена")
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики: {str(e)}", exc_info=True)
+        await callback.answer("❌ Ошибка при загрузке статистики", show_alert=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
