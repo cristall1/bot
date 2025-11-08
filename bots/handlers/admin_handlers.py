@@ -25,6 +25,7 @@ from services.courier_service import CourierService
 from states import AdminStates
 from utils.logger import logger
 from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 from models import (
     UserMessage, Delivery, Notification, ShurtaAlert, User,
     Document, DocumentButton, Broadcast, SystemSetting, Courier
@@ -689,6 +690,318 @@ async def handle_shurta_menu(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@router.callback_query(F.data == "admin_notif_pending")
+async def show_pending_notifications(callback: CallbackQuery, state: FSMContext):
+    """Показать ожидающие одобрения уведомления"""
+    await state.set_state(AdminStates.notification_view)
+    
+    async with AsyncSessionLocal() as session:
+        notifications = await session.execute(
+            select(Notification)
+            .options(joinedload(Notification.creator))
+            .where(
+                Notification.is_approved == False,
+                Notification.is_moderated == False,
+                Notification.is_active == True
+            )
+            .order_by(Notification.created_at.desc())
+            .limit(20)
+        )
+        notifs = notifications.unique().scalars().all()
+        
+        if not notifs:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_prop_menu")]
+            ])
+            await callback.message.edit_text(
+                "✅ Нет ожидающих одобрения уведомлений",
+                reply_markup=keyboard
+            )
+            await callback.answer()
+            return
+        
+        keyboard_buttons = []
+        for notif in notifs:
+            preview = (notif.title[:30] + "...") if len(notif.title) > 30 else notif.title
+            creator_name = notif.creator.username if notif.creator and notif.creator.username else f"ID{notif.creator_id}"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"🔴 {notif.type} - {preview}",
+                    callback_data=f"admin_notif_view_{notif.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_prop_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"🔔 ОЖИДАЮЩИЕ ОДОБРЕНИЯ УВЕДОМЛЕНИЯ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(notifs)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_notif_view_"))
+async def view_notification_detail(callback: CallbackQuery):
+    """Просмотр деталей уведомления"""
+    notif_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        notification = await session.get(Notification, notif_id)
+        if not notification:
+            await callback.answer("❌ Уведомление не найдено", show_alert=True)
+            return
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Принять", callback_data=f"admin_notif_approve_{notif_id}")],
+            [InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_notif_reject_{notif_id}")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_notif_pending")]
+        ])
+        
+        text = f"🔔 УВЕДОМЛЕНИЕ\n"
+        text += f"═══════════════════════════════════════\n\n"
+        text += f"Тип: {notification.type}\n"
+        text += f"Название: {notification.title}\n"
+        text += f"Описание: {notification.description}\n"
+        text += f"Телефон: {notification.phone}\n"
+        text += f"Место: {notification.address_text or 'не указано'}"
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_notif_approve_"))
+async def approve_notification(callback: CallbackQuery):
+    """Одобрить уведомление"""
+    notif_id = int(callback.data.split("_")[-1])
+    admin_id = callback.from_user.id
+    
+    async with AsyncSessionLocal() as session:
+        notification = await NotificationService.approve_notification(session, notif_id, admin_id)
+        if notification:
+            await callback.answer("✅ Уведомление одобрено", show_alert=True)
+        else:
+            await callback.answer("❌ Ошибка при одобрении", show_alert=True)
+    
+    await callback.message.edit_text("✅ Уведомление одобрено")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_notif_reject_"))
+async def reject_notification(callback: CallbackQuery):
+    """Отклонить уведомление"""
+    notif_id = int(callback.data.split("_")[-1])
+    admin_id = callback.from_user.id
+    
+    async with AsyncSessionLocal() as session:
+        notification = await NotificationService.reject_notification(session, notif_id, admin_id)
+        if notification:
+            await callback.answer("✅ Уведомление отклонено", show_alert=True)
+        else:
+            await callback.answer("❌ Ошибка при отклонении", show_alert=True)
+    
+    await callback.message.edit_text("✅ Уведомление отклонено")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_notif_approved")
+async def show_approved_notifications(callback: CallbackQuery):
+    """Показать одобренные уведомления"""
+    async with AsyncSessionLocal() as session:
+        notifications = await session.execute(
+            select(Notification)
+            .where(Notification.is_approved == True, Notification.is_active == True)
+            .order_by(Notification.created_at.desc())
+            .limit(20)
+        )
+        notifs = notifications.scalars().all()
+        
+        keyboard_buttons = []
+        for notif in notifs:
+            preview = (notif.title[:30] + "...") if len(notif.title) > 30 else notif.title
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"✅ {notif.type} - {preview}",
+                    callback_data=f"admin_notif_approved_view_{notif.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_prop_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"✅ ОДОБРЕННЫЕ УВЕДОМЛЕНИЯ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(notifs)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_shurta_pending")
+async def show_pending_shurta_alerts(callback: CallbackQuery):
+    """Показать ожидающие одобрения алерты Shurta"""
+    async with AsyncSessionLocal() as session:
+        alerts = await session.execute(
+            select(ShurtaAlert)
+            .options(joinedload(ShurtaAlert.creator))
+            .where(
+                ShurtaAlert.is_approved == False,
+                ShurtaAlert.is_moderated == False,
+                ShurtaAlert.is_active == True
+            )
+            .order_by(ShurtaAlert.created_at.desc())
+            .limit(20)
+        )
+        alert_list = alerts.unique().scalars().all()
+        
+        if not alert_list:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_shurta_menu")]
+            ])
+            await callback.message.edit_text(
+                "✅ Нет ожидающих одобрения алертов",
+                reply_markup=keyboard
+            )
+            await callback.answer()
+            return
+        
+        keyboard_buttons = []
+        for alert in alert_list:
+            preview = (alert.description[:30] + "...") if len(alert.description) > 30 else alert.description
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"🔴 {preview}",
+                    callback_data=f"admin_shurta_view_{alert.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_shurta_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"🚨 ОЖИДАЮЩИЕ ОДОБРЕНИЯ АЛЕРТЫ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(alert_list)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_shurta_view_"))
+async def view_shurta_detail(callback: CallbackQuery):
+    """Просмотр деталей Shurta алерта"""
+    alert_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        alert = await session.get(ShurtaAlert, alert_id)
+        if not alert:
+            await callback.answer("❌ Алерт не найден", show_alert=True)
+            return
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Принять", callback_data=f"admin_shurta_approve_{alert_id}")],
+            [InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_shurta_reject_{alert_id}")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_shurta_pending")]
+        ])
+        
+        text = f"🚨 SHURTA АЛЕРТ\n"
+        text += f"═══════════════════════════════════════\n\n"
+        text += f"Описание: {alert.description}\n"
+        text += f"Место: {alert.address_text or 'не указано'}"
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_shurta_approve_"))
+async def approve_shurta_alert(callback: CallbackQuery):
+    """Одобрить Shurta алерт"""
+    alert_id = int(callback.data.split("_")[-1])
+    admin_id = callback.from_user.id
+    
+    async with AsyncSessionLocal() as session:
+        alert = await ShurtaService.approve_alert(session, alert_id, admin_id)
+        if alert:
+            await callback.answer("✅ Алерт одобрен", show_alert=True)
+        else:
+            await callback.answer("❌ Ошибка при одобрении", show_alert=True)
+    
+    await callback.message.edit_text("✅ Алерт одобрен")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_shurta_reject_"))
+async def reject_shurta_alert(callback: CallbackQuery):
+    """Отклонить Shurta алерт"""
+    alert_id = int(callback.data.split("_")[-1])
+    admin_id = callback.from_user.id
+    
+    async with AsyncSessionLocal() as session:
+        alert = await ShurtaService.reject_alert(session, alert_id, admin_id)
+        if alert:
+            await callback.answer("✅ Алерт отклонен", show_alert=True)
+        else:
+            await callback.answer("❌ Ошибка при отклонении", show_alert=True)
+    
+    await callback.message.edit_text("✅ Алерт отклонен")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_shurta_approved")
+async def show_approved_shurta_alerts(callback: CallbackQuery):
+    """Показать одобренные Shurta алерты"""
+    async with AsyncSessionLocal() as session:
+        alerts = await session.execute(
+            select(ShurtaAlert)
+            .where(ShurtaAlert.is_approved == True, ShurtaAlert.is_active == True)
+            .order_by(ShurtaAlert.created_at.desc())
+            .limit(20)
+        )
+        alert_list = alerts.scalars().all()
+        
+        keyboard_buttons = []
+        for alert in alert_list:
+            preview = (alert.description[:30] + "...") if len(alert.description) > 30 else alert.description
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"✅ {preview}",
+                    callback_data=f"admin_shurta_approved_view_{alert.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_shurta_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"✅ ОДОБРЕННЫЕ АЛЕРТЫ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(alert_list)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT (Управление пользователями)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -971,11 +1284,12 @@ async def show_unread_messages(callback: CallbackQuery, state: FSMContext):
     async with AsyncSessionLocal() as session:
         messages = await session.execute(
             select(UserMessage)
+            .options(joinedload(UserMessage.user))
             .where(UserMessage.is_read == False)
             .order_by(UserMessage.created_at.desc())
             .limit(20)
         )
-        msgs = messages.scalars().all()
+        msgs = messages.unique().scalars().all()
         
         if not msgs:
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
