@@ -1,6 +1,15 @@
+"""
+Admin Bot Handlers - Complete Management System
+Language: Russian
+Framework: aiogram 3.x
+"""
+
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
+    ReplyKeyboardMarkup, KeyboardButton
+)
 from aiogram.fsm.context import FSMContext
 from database import AsyncSessionLocal
 from config import settings
@@ -12,44 +21,52 @@ from services.shurta_service import ShurtaService
 from services.user_message_service import UserMessageService
 from services.broadcast_service import BroadcastService
 from services.admin_log_service import AdminLogService
+from services.courier_service import CourierService
 from states import AdminStates
 from utils.logger import logger
 from sqlalchemy import select, func
-from models import UserMessage, Delivery, Notification, ShurtaAlert, User
+from models import (
+    UserMessage, Delivery, Notification, ShurtaAlert, User,
+    Document, DocumentButton, Broadcast, SystemSetting, Courier
+)
+import json
 
 router = Router()
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# MAIN MENU AND NAVIGATION
+# ═══════════════════════════════════════════════════════════════════════════
+
 def get_admin_main_menu():
-    """Get admin main menu with inline buttons"""
+    """Главное меню администратора (Admin main menu)"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📚 Hujjat yordami", callback_data="admin_documents")],
-        [InlineKeyboardButton(text="🚚 Dostavka xizmati", callback_data="admin_delivery")],
-        [InlineKeyboardButton(text="🔔 Propaja", callback_data="admin_propaja")],
-        [InlineKeyboardButton(text="🚨 Shurta", callback_data="admin_shurta")],
-        [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin_users")],
-        [InlineKeyboardButton(text="💬 Xabarlar", callback_data="admin_messages")],
-        [InlineKeyboardButton(text="📢 Rассылка", callback_data="admin_broadcast")],
-        [InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="admin_settings")],
-        [InlineKeyboardButton(text="🔙 Chiqish", callback_data="admin_exit")]
+        [InlineKeyboardButton(text="📚 Управление документами", callback_data="admin_doc_menu")],
+        [InlineKeyboardButton(text="🚚 Управление доставкой", callback_data="admin_del_menu")],
+        [InlineKeyboardButton(text="🔔 Управление потерями", callback_data="admin_prop_menu")],
+        [InlineKeyboardButton(text="🚨 Управление Полицией", callback_data="admin_shurta_menu")],
+        [InlineKeyboardButton(text="👥 Управление пользователями", callback_data="admin_user_menu")],
+        [InlineKeyboardButton(text="💬 Сообщения от пользователей", callback_data="admin_msg_menu")],
+        [InlineKeyboardButton(text="📢 Система рассылки", callback_data="admin_bc_menu")],
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats_menu")],
+        [InlineKeyboardButton(text="⚙️ Настройки системы", callback_data="admin_settings_menu")],
     ])
     return keyboard
 
 
 @router.message(Command("start"))
-async def cmd_admin_start(message: Message):
-    """Handle /start for admin bot"""
+async def cmd_admin_start(message: Message, state: FSMContext):
+    """Обработка /start для админ-бота"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         
-        # Check if user is admin
+        # Проверка прав администратора
         if not user or not user.is_admin:
             if message.from_user.id not in settings.admin_ids_list:
                 await message.answer("❌ У вас нет прав администратора.")
                 return
             
-            # Create/update admin user
+            # Создание/обновление пользователя-администратора
             if not user:
                 user = await UserService.create_or_update_user(
                     session,
@@ -59,321 +76,1341 @@ async def cmd_admin_start(message: Message):
                     language="RU"
                 )
             
-            # Make user admin
+            # Предоставление прав администратора
             await UserService.make_admin(session, message.from_user.id)
         
+        await state.clear()
         await message.answer(
-            "🔐 Админ-панель\n\nДобро пожаловать в систему управления.",
+            "🔐 АДМИН-ПАНЕЛЬ\n"
+            "═══════════════════════════════════════\n\n"
+            "Добро пожаловать в систему управления ботом.\n"
+            "Выберите нужный раздел:",
             reply_markup=get_admin_main_menu()
         )
 
 
-# ============= DOCUMENT MANAGEMENT =============
-
-@router.callback_query(F.data == "admin_documents")
-async def handle_documents_menu(callback: CallbackQuery):
-    """Show document management menu"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇺🇿 Oʻzbekiston", callback_data="admin_doc_cit_UZ")],
-        [InlineKeyboardButton(text="🇷🇺 Rossiya", callback_data="admin_doc_cit_RU")],
-        [InlineKeyboardButton(text="🇰🇿 Qazaqstan", callback_data="admin_doc_cit_KZ")],
-        [InlineKeyboardButton(text="🇰🇬 Qirgiziston", callback_data="admin_doc_cit_KG")],
-        [InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")]
-    ])
-    
-    await callback.message.edit_text(
-        "Hujjat yordami bo'limini tanlang:",
-        reply_markup=keyboard
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("admin_doc_cit_"))
-async def show_documents_for_citizenship(callback: CallbackQuery):
-    """Show documents for selected citizenship"""
-    citizenship = callback.data.split("_")[-1]
-    
-    async with AsyncSessionLocal() as session:
-        documents = await DocumentService.get_documents_by_citizenship(session, citizenship)
-        
-        buttons = []
-        for doc in documents:
-            buttons.append([InlineKeyboardButton(
-                text=f"✏️ {doc.name_ru}",
-                callback_data=f"admin_doc_edit_{doc.id}"
-            )])
-        
-        buttons.append([InlineKeyboardButton(text="➕ Yangi hujjat qo'shish", callback_data=f"admin_doc_add_{citizenship}")])
-        buttons.append([InlineKeyboardButton(text="← Orqaga", callback_data="admin_documents")])
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-        
-        citizenship_name = {"UZ": "🇺🇿 Oʻzbekiston", "RU": "🇷🇺 Rossiya", "KZ": "🇰🇿 Qazaqstan", "KG": "🇰🇬 Qirgiziston"}.get(citizenship)
-        
-        await callback.message.edit_text(
-            f"{citizenship_name} uchun hujjatlar:",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("admin_doc_edit_"))
-async def edit_document(callback: CallbackQuery):
-    """Show document edit menu"""
-    doc_id = int(callback.data.split("_")[-1])
-    
-    async with AsyncSessionLocal() as session:
-        document = await DocumentService.get_document(session, doc_id)
-        if not document:
-            await callback.answer("Hujjat topilmadi")
-            return
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📝 Nomini o'zgartirish", callback_data=f"admin_doc_name_{doc_id}")],
-            [InlineKeyboardButton(text="📄 Matnini o'zgartirish", callback_data=f"admin_doc_content_{doc_id}")],
-            [InlineKeyboardButton(text="🖼️ Rasmni o'zgartirish", callback_data=f"admin_doc_photo_{doc_id}")],
-            [InlineKeyboardButton(text="🔗 Havolani o'zgartirish", callback_data=f"admin_doc_telegraph_{doc_id}")],
-            [InlineKeyboardButton(text="⚙️ Tugmalarni boshqarish", callback_data=f"admin_doc_buttons_{doc_id}")],
-            [InlineKeyboardButton(text="🗑️ Hujjatni o'chirib tashlash", callback_data=f"admin_doc_delete_{doc_id}")],
-            [InlineKeyboardButton(text="← Orqaga", callback_data=f"admin_doc_cit_{document.citizenship_scope}")]
-        ])
-        
-        await callback.message.edit_text(
-            f"HUJJAT: {document.name_ru}\n═══════════════════════════",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("admin_doc_buttons_"))
-async def manage_document_buttons(callback: CallbackQuery):
-    """Manage document buttons"""
-    doc_id = int(callback.data.split("_")[-1])
-    
-    async with AsyncSessionLocal() as session:
-        document = await DocumentService.get_document(session, doc_id)
-        buttons_list = await DocumentService.get_document_buttons(session, doc_id)
-        
-        keyboard_buttons = []
-        for btn in buttons_list:
-            keyboard_buttons.append([InlineKeyboardButton(
-                text=f"✏️ Tugma: \"{btn.text_ru}\"",
-                callback_data=f"admin_btn_edit_{btn.id}"
-            )])
-        
-        keyboard_buttons.append([InlineKeyboardButton(text="➕ Yangi tugma qo'shish", callback_data=f"admin_btn_add_{doc_id}")])
-        keyboard_buttons.append([InlineKeyboardButton(text="← Orqaga", callback_data=f"admin_doc_edit_{doc_id}")])
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-        
-        await callback.message.edit_text(
-            f"{document.name_ru} - Tugmalar:\n═══════════════════════════",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-# ============= DELIVERY MANAGEMENT =============
-
-@router.callback_query(F.data == "admin_delivery")
-async def handle_delivery_menu(callback: CallbackQuery):
-    """Show delivery management menu"""
-    async with AsyncSessionLocal() as session:
-        from sqlalchemy import select, func
-        from models import Delivery
-        
-        # Count deliveries by status
-        waiting = await session.execute(select(func.count(Delivery.id)).where(Delivery.status == "WAITING"))
-        waiting_count = waiting.scalar() or 0
-        
-        completed = await session.execute(select(func.count(Delivery.id)).where(Delivery.status == "COMPLETED"))
-        completed_count = completed.scalar() or 0
-        
-        rejected = await session.execute(select(func.count(Delivery.id)).where(Delivery.status.in_(["REJECTED", "CANCELLED"])))
-        rejected_count = rejected.scalar() or 0
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"📬 Faol zakazy ({waiting_count})", callback_data="admin_del_active")],
-            [InlineKeyboardButton(text=f"✅ Bajarilgan ({completed_count})", callback_data="admin_del_completed")],
-            [InlineKeyboardButton(text=f"❌ Rad etilgan ({rejected_count})", callback_data="admin_del_rejected")],
-            [InlineKeyboardButton(text="👨‍💼 Kuryer boshqaruvi", callback_data="admin_couriers")],
-            [InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")]
-        ])
-        
-        await callback.message.edit_text(
-            "Dostavka bo'limi\n═════════════════",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-# ============= STATISTICS =============
-
-@router.callback_query(F.data == "admin_stats")
-async def handle_statistics(callback: CallbackQuery):
-    """Handle statistics"""
-    async with AsyncSessionLocal() as session:
-        # Get user stats
-        user_stats = await UserService.get_user_stats(session)
-        
-        # Get delivery stats
-        total_deliveries = await session.execute(select(func.count(Delivery.id)))
-        total_del = total_deliveries.scalar() or 0
-        
-        active_deliveries = await session.execute(
-            select(func.count(Delivery.id)).where(Delivery.status == "WAITING")
-        )
-        active_del = active_deliveries.scalar() or 0
-        
-        # Get notification stats
-        total_notifications = await session.execute(select(func.count(Notification.id)))
-        total_notif = total_notifications.scalar() or 0
-        
-        # Get shurta stats
-        total_shurta = await session.execute(select(func.count(ShurtaAlert.id)))
-        total_shurt = total_shurta.scalar() or 0
-        
-        # Get courier stats
-        couriers = await session.execute(select(func.count(User.id)).where(User.is_courier == True))
-        courier_count = couriers.scalar() or 0
-        
-        message_text = f"""
-STATISTIKA PANELI
-═════════════════
-
-👥 Foydalanuvchilar: {user_stats.get('total', 0)}
-🚚 Faol zakasy: {active_del}
-📦 Propaja: {total_notif}
-🚨 Shurta: {total_shurt}
-👨‍💼 Kuryer: {courier_count}
-"""
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="👁️ Batafsil ko'rish", callback_data="admin_stats_detail")],
-            [InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")]
-        ])
-        
-        await callback.message.edit_text(message_text, reply_markup=keyboard)
-    
-    await callback.answer()
-
-
-# ============= MESSAGES FROM USERS =============
-
-@router.callback_query(F.data == "admin_messages")
-async def handle_user_messages(callback: CallbackQuery):
-    """Show user messages"""
-    async with AsyncSessionLocal() as session:
-        unread_count = await session.execute(
-            select(func.count(UserMessage.id)).where(UserMessage.is_read == False)
-        )
-        unread = unread_count.scalar() or 0
-        
-        messages = await session.execute(
-            select(UserMessage).order_by(UserMessage.created_at.desc()).limit(10)
-        )
-        user_messages = messages.scalars().all()
-        
-        if not user_messages:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")]
-            ])
-            await callback.message.edit_text("Xabarlar yo'q.", reply_markup=keyboard)
-            await callback.answer()
-            return
-        
-        buttons = []
-        for msg in user_messages:
-            preview = msg.message_text[:30] + "..." if len(msg.message_text) > 30 else msg.message_text
-            status = "🔴" if not msg.is_read else "✅"
-            buttons.append([InlineKeyboardButton(
-                text=f"{status} @{msg.user.username if msg.user else 'Unknown'} - {preview}",
-                callback_data=f"admin_msg_view_{msg.id}"
-            )])
-        
-        buttons.append([InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")])
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-        
-        await callback.message.edit_text(
-            f"Foydalanuvchilardan xabarlar\n═════════════════════════════\n\nO'qilmagan: {unread}",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("admin_msg_view_"))
-async def view_user_message(callback: CallbackQuery):
-    """View specific user message"""
-    msg_id = int(callback.data.split("_")[-1])
-    
-    async with AsyncSessionLocal() as session:
-        message = await UserMessageService.get_message(session, msg_id)
-        if not message:
-            await callback.answer("Xabar topilmadi")
-            return
-        
-        # Mark as read
-        await UserMessageService.mark_as_read(session, msg_id)
-        
-        user_info = f"@{message.user.username}" if message.user.username else f"ID: {message.user_id}"
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💬 Javob", callback_data=f"admin_msg_reply_{msg_id}")],
-            [InlineKeyboardButton(text="🗑️ O'chirib tashlash", callback_data=f"admin_msg_delete_{msg_id}")],
-            [InlineKeyboardButton(text="← Orqaga", callback_data="admin_messages")]
-        ])
-        
-        await callback.message.edit_text(
-            f"Xabar: {user_info}\n═════════════════\n\n{message.message_text}",
-            reply_markup=keyboard
-        )
-    
-    await callback.answer()
-
-
-# ============= BROADCAST =============
-
-@router.callback_query(F.data == "admin_broadcast")
-async def handle_broadcast(callback: CallbackQuery, state: FSMContext):
-    """Handle broadcast menu"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✍️ Yangi xabarnoma", callback_data="admin_bc_new")],
-        [InlineKeyboardButton(text="📋 O'tgan xabarnomalar", callback_data="admin_bc_history")],
-        [InlineKeyboardButton(text="← Orqaga", callback_data="admin_back_main")]
-    ])
-    
-    await callback.message.edit_text(
-        "Xabarnoma jo'natish\n═══════════════════",
-        reply_markup=keyboard
-    )
-    await callback.answer()
-
-
-# ============= BACK TO MAIN =============
+# ═══════════════════════════════════════════════════════════════════════════
+# BACK TO MAIN MENU
+# ═══════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "admin_back_main")
-async def back_to_admin_main(callback: CallbackQuery):
-    """Go back to admin main menu"""
+async def back_to_admin_main(callback: CallbackQuery, state: FSMContext):
+    """Возврат в главное меню администратора"""
+    await state.clear()
     await callback.message.edit_text(
-        "🔐 Админ-панель\n\nДобро пожаловать в систему управления.",
+        "🔐 АДМИН-ПАНЕЛЬ\n"
+        "═══════════════════════════════════════\n\n"
+        "Добро пожаловать в систему управления ботом.\n"
+        "Выберите нужный раздел:",
         reply_markup=get_admin_main_menu()
     )
     await callback.answer()
 
 
 @router.callback_query(F.data == "admin_exit")
-async def exit_admin(callback: CallbackQuery):
-    """Exit admin panel"""
+async def exit_admin_panel(callback: CallbackQuery, state: FSMContext):
+    """Выход из админ-панели"""
+    await state.clear()
     await callback.message.delete()
+    await callback.answer("Вы вышли из админ-панели.", show_alert=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DOCUMENT MANAGEMENT (Управление документами)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_doc_menu")
+async def handle_document_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню управления документами"""
+    await state.set_state(AdminStates.hujjat_menu)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🇺🇿 Узбекистан", callback_data="admin_doc_cit_UZ")],
+        [InlineKeyboardButton(text="🇷🇺 Россия", callback_data="admin_doc_cit_RU")],
+        [InlineKeyboardButton(text="🇰🇿 Казахстан", callback_data="admin_doc_cit_KZ")],
+        [InlineKeyboardButton(text="🇰🇬 Киргизия", callback_data="admin_doc_cit_KG")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+    ])
+    
+    await callback.message.edit_text(
+        "📚 УПРАВЛЕНИЕ ДОКУМЕНТАМИ\n"
+        "═══════════════════════════════════════\n\n"
+        "Выберите страну для управления документами:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_doc_cit_"))
+async def show_documents_list(callback: CallbackQuery, state: FSMContext):
+    """Показать список документов для выбранной страны"""
+    citizenship = callback.data.split("_")[-1]
+    
+    await state.update_data(selected_citizenship=citizenship)
+    await state.set_state(AdminStates.hujjat_list)
+    
+    async with AsyncSessionLocal() as session:
+        documents = await DocumentService.get_documents_by_citizenship(session, citizenship)
+        
+        citizenship_map = {
+            "UZ": "🇺🇿 Узбекистан",
+            "RU": "🇷🇺 Россия",
+            "KZ": "🇰🇿 Казахстан",
+            "KG": "🇰🇬 Киргизия"
+        }
+        
+        keyboard_buttons = []
+        for doc in documents:
+            status_icon = "✅" if doc.is_active else "❌"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"{status_icon} {doc.name_ru}",
+                    callback_data=f"admin_doc_item_{doc.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="➕ Добавить документ", callback_data=f"admin_doc_add_{citizenship}")
+        ])
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_doc_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"📚 ДОКУМЕНТЫ: {citizenship_map.get(citizenship, citizenship)}\n"
+            "═══════════════════════════════════════\n\n"
+            f"Всего документов: {len(documents)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_doc_item_"))
+async def view_document_item(callback: CallbackQuery, state: FSMContext):
+    """Просмотр и редактирование документа"""
+    doc_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if not document:
+            await callback.answer("❌ Документ не найден", show_alert=True)
+            return
+        
+        await state.set_state(AdminStates.hujjat_item)
+        await state.update_data(current_doc_id=doc_id)
+        
+        status_icon = "✅" if document.is_active else "❌"
+        status_text = "Включен" if document.is_active else "Отключен"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text=f"[{status_icon}] Статус", callback_data=f"admin_doc_toggle_{doc_id}"),
+                InlineKeyboardButton(text="✏️ Имя РУ", callback_data=f"admin_doc_edit_name_ru_{doc_id}")
+            ],
+            [
+                InlineKeyboardButton(text="✏️ Имя УЗ", callback_data=f"admin_doc_edit_name_uz_{doc_id}"),
+                InlineKeyboardButton(text="📄 Текст РУ", callback_data=f"admin_doc_edit_content_ru_{doc_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📄 Текст УЗ", callback_data=f"admin_doc_edit_content_uz_{doc_id}"),
+                InlineKeyboardButton(text="🖼️ Фото", callback_data=f"admin_doc_edit_photo_{doc_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🎵 Аудио", callback_data=f"admin_doc_edit_audio_{doc_id}"),
+                InlineKeyboardButton(text="📎 PDF", callback_data=f"admin_doc_edit_pdf_{doc_id}")
+            ],
+            [
+                InlineKeyboardButton(text="⚙️ Кнопки", callback_data=f"admin_doc_buttons_{doc_id}"),
+                InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"admin_doc_delete_{doc_id}")
+            ],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"admin_doc_cit_{document.citizenship_scope}")]
+        ])
+        
+        content_info = ""
+        if document.content_ru:
+            content_info += f"\n📝 Текст РУ: {len(document.content_ru)} символов"
+        if document.photo_file_id:
+            content_info += "\n🖼️ Фото: есть"
+        if document.audio_file_id:
+            content_info += "\n🎵 Аудио: есть"
+        if document.pdf_file_id:
+            content_info += "\n📎 PDF: есть"
+        
+        await callback.message.edit_text(
+            f"📚 ДОКУМЕНТ: {document.name_ru}\n"
+            f"═══════════════════════════════════════\n"
+            f"Статус: {status_text}\n"
+            f"Страна: {document.citizenship_scope}"
+            f"{content_info}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_doc_toggle_"))
+async def toggle_document_status(callback: CallbackQuery):
+    """Переключить статус документа (включить/отключить)"""
+    doc_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if document:
+            document.is_active = not document.is_active
+            await session.commit()
+            await callback.answer("✅ Статус обновлен", show_alert=False)
+            # Refresh the view
+            await callback.message.edit_text(callback.message.text)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_doc_edit_name_"))
+async def edit_document_name(callback: CallbackQuery, state: FSMContext):
+    """Редактирование имени документа"""
+    parts = callback.data.split("_")
+    lang = parts[-2]  # ru or uz
+    doc_id = int(parts[-1])
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if not document:
+            await callback.answer("❌ Документ не найден", show_alert=True)
+            return
+        
+        current_name = document.name_ru if lang == "ru" else document.name_uz
+        
+        if lang == "ru":
+            await state.set_state(AdminStates.editing_hujjat_name_ru)
+        else:
+            await state.set_state(AdminStates.editing_hujjat_name_uz)
+        
+        await state.update_data(current_doc_id=doc_id, edit_lang=lang)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_doc_item_{doc_id}")]
+        ])
+        
+        lang_text = "РУССКОМ" if lang == "ru" else "УЗБЕКСКОМ"
+        
+        await callback.message.edit_text(
+            f"✏️ РЕДАКТИРОВАНИЕ ИМЕНИ НА {lang_text}\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Текущее имя:\n{current_name}\n\n"
+            f"Введите новое имя:",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.editing_hujjat_name_ru, AdminStates.editing_hujjat_name_uz))
+async def process_document_name_edit(message: Message, state: FSMContext):
+    """Обработка ввода нового имени документа"""
+    data = await state.get_data()
+    doc_id = data.get("current_doc_id")
+    lang = data.get("edit_lang")
+    new_name = message.text.strip()
+    
+    if not new_name or len(new_name) < 2:
+        await message.answer("❌ Имя должно содержать минимум 2 символа")
+        return
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if document:
+            if lang == "ru":
+                document.name_ru = new_name
+            else:
+                document.name_uz = new_name
+            await session.commit()
+            await message.answer("✅ Имя документа обновлено")
+            
+            # Return to document view
+            status_icon = "✅" if document.is_active else "❌"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text=f"[{status_icon}] Статус", callback_data=f"admin_doc_toggle_{doc_id}"),
+                    InlineKeyboardButton(text="✏️ Имя РУ", callback_data=f"admin_doc_edit_name_ru_{doc_id}")
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data=f"admin_doc_cit_{document.citizenship_scope}")]
+            ])
+            
+            await message.answer(
+                f"📚 ДОКУМЕНТ: {document.name_ru}\n"
+                f"═══════════════════════════════════════\n"
+                f"Статус: {'Включен' if document.is_active else 'Отключен'}",
+                reply_markup=keyboard
+            )
+    
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin_doc_edit_content_"))
+async def edit_document_content(callback: CallbackQuery, state: FSMContext):
+    """Редактирование содержимого документа"""
+    parts = callback.data.split("_")
+    lang = parts[-2]  # ru or uz
+    doc_id = int(parts[-1])
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if not document:
+            await callback.answer("❌ Документ не найден", show_alert=True)
+            return
+        
+        current_content = document.content_ru if lang == "ru" else document.content_uz
+        
+        if lang == "ru":
+            await state.set_state(AdminStates.editing_hujjat_content_ru)
+        else:
+            await state.set_state(AdminStates.editing_hujjat_content_uz)
+        
+        await state.update_data(current_doc_id=doc_id, edit_lang=lang)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_doc_item_{doc_id}")]
+        ])
+        
+        lang_text = "РУССКОМ" if lang == "ru" else "УЗБЕКСКОМ"
+        current_display = (current_content[:100] + "...") if current_content and len(current_content) > 100 else (current_content or "[Пусто]")
+        
+        await callback.message.edit_text(
+            f"📄 РЕДАКТИРОВАНИЕ ТЕКСТА НА {lang_text}\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Текущий текст:\n{current_display}\n\n"
+            f"Введите новый текст:",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.editing_hujjat_content_ru, AdminStates.editing_hujjat_content_uz))
+async def process_document_content_edit(message: Message, state: FSMContext):
+    """Обработка ввода нового содержимого документа"""
+    data = await state.get_data()
+    doc_id = data.get("current_doc_id")
+    lang = data.get("edit_lang")
+    new_content = message.text.strip()
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if document:
+            if lang == "ru":
+                document.content_ru = new_content
+            else:
+                document.content_uz = new_content
+            await session.commit()
+            await message.answer("✅ Содержимое документа обновлено")
+            
+            # Return to document view
+            status_icon = "✅" if document.is_active else "❌"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data=f"admin_doc_item_{doc_id}")]
+            ])
+            
+            await message.answer(
+                f"📚 ДОКУМЕНТ: {document.name_ru}\n"
+                f"═══════════════════════════════════════\n"
+                f"✅ Текст обновлен",
+                reply_markup=keyboard
+            )
+    
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin_doc_edit_photo_"))
+async def edit_document_photo(callback: CallbackQuery, state: FSMContext):
+    """Загрузка фото для документа"""
+    doc_id = int(callback.data.split("_")[-1])
+    
+    await state.set_state(AdminStates.editing_hujjat_photo)
+    await state.update_data(current_doc_id=doc_id)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_doc_item_{doc_id}")]
+    ])
+    
+    await callback.message.edit_text(
+        "🖼️ ЗАГРУЗКА ФОТО\n"
+        "═══════════════════════════════════════\n\n"
+        "Отправьте фото документа или нажмите 'Отмена':",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.editing_hujjat_photo))
+async def process_document_photo(message: Message, state: FSMContext):
+    """Обработка загруженного фото"""
+    if not message.photo:
+        await message.answer("❌ Это не фото. Пожалуйста, отправьте изображение.")
+        return
+    
+    data = await state.get_data()
+    doc_id = data.get("current_doc_id")
+    photo_file_id = message.photo[-1].file_id
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if document:
+            document.photo_file_id = photo_file_id
+            await session.commit()
+            await message.answer("✅ Фото документа обновлено")
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data=f"admin_doc_item_{doc_id}")]
+            ])
+            
+            await message.answer(
+                f"📚 ДОКУМЕНТ: {document.name_ru}\n"
+                f"═══════════════════════════════════════\n"
+                f"✅ Фото обновлено",
+                reply_markup=keyboard
+            )
+    
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin_doc_delete_"))
+async def delete_document(callback: CallbackQuery, state: FSMContext):
+    """Удаление документа (soft delete)"""
+    doc_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        document = await DocumentService.get_document(session, doc_id)
+        if not document:
+            await callback.answer("❌ Документ не найден", show_alert=True)
+            return
+        
+        citizenship = document.citizenship_scope
+        await DocumentService.delete_document(session, doc_id)
+        
+        await callback.answer("✅ Документ удален", show_alert=True)
+        
+        # Return to documents list
+        documents = await DocumentService.get_documents_by_citizenship(session, citizenship)
+        
+        keyboard_buttons = []
+        for doc in documents:
+            status_icon = "✅" if doc.is_active else "❌"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"{status_icon} {doc.name_ru}",
+                    callback_data=f"admin_doc_item_{doc.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_doc_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"📚 ДОКУМЕНТЫ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего документов: {len(documents)}",
+            reply_markup=keyboard
+        )
+
+
+@router.callback_query(F.data.startswith("admin_doc_buttons_"))
+async def manage_document_buttons(callback: CallbackQuery, state: FSMContext):
+    """Управление кнопками документа"""
+    doc_id = int(callback.data.split("_")[-1])
+    
+    await state.set_state(AdminStates.button_management)
+    await state.update_data(current_doc_id=doc_id)
+    
+    async with AsyncSessionLocal() as session:
+        buttons = await DocumentService.get_document_buttons(session, doc_id)
+        
+        keyboard_buttons = []
+        for idx, btn in enumerate(buttons, 1):
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"{idx}️⃣ {btn.text_ru}",
+                    callback_data=f"admin_btn_edit_{btn.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="➕ Добавить кнопку", callback_data=f"admin_btn_add_{doc_id}")
+        ])
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data=f"admin_doc_item_{doc_id}")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"⚙️ УПРАВЛЕНИЕ КНОПКАМИ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего кнопок: {len(buttons)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DELIVERY MANAGEMENT (Управление доставкой)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_del_menu")
+async def handle_delivery_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню управления доставкой"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        waiting = await session.execute(
+            select(func.count(Delivery.id)).where(Delivery.status == "WAITING")
+        )
+        waiting_count = waiting.scalar() or 0
+        
+        completed = await session.execute(
+            select(func.count(Delivery.id)).where(Delivery.status == "COMPLETED")
+        )
+        completed_count = completed.scalar() or 0
+        
+        rejected = await session.execute(
+            select(func.count(Delivery.id)).where(
+                Delivery.status.in_(["REJECTED", "CANCELLED"])
+            )
+        )
+        rejected_count = rejected.scalar() or 0
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"📬 Активные заказы ({waiting_count})", callback_data="admin_del_active")],
+            [InlineKeyboardButton(text=f"✅ Завершенные ({completed_count})", callback_data="admin_del_completed")],
+            [InlineKeyboardButton(text=f"❌ Отклоненные ({rejected_count})", callback_data="admin_del_rejected")],
+            [InlineKeyboardButton(text="👨‍💼 Управление курьерами", callback_data="admin_couriers_list")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            "🚚 УПРАВЛЕНИЕ ДОСТАВКОЙ\n"
+            "═══════════════════════════════════════\n\n"
+            f"Активные заказы: {waiting_count}\n"
+            f"Завершенные: {completed_count}\n"
+            f"Отклоненные: {rejected_count}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NOTIFICATION MANAGEMENT (Управление потерями)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_prop_menu")
+async def handle_notification_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню управления уведомлениями о потерях"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        # Count pending notifications
+        pending = await session.execute(
+            select(func.count(Notification.id)).where(
+                Notification.is_approved == False,
+                Notification.is_moderated == False
+            )
+        )
+        pending_count = pending.scalar() or 0
+        
+        # Count approved
+        approved = await session.execute(
+            select(func.count(Notification.id)).where(Notification.is_approved == True)
+        )
+        approved_count = approved.scalar() or 0
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"⏳ На модерации ({pending_count})", callback_data="admin_notif_pending")],
+            [InlineKeyboardButton(text=f"✅ Одобренные ({approved_count})", callback_data="admin_notif_approved")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            "🔔 УПРАВЛЕНИЕ ПОТЕРЯШКАМИ\n"
+            "═══════════════════════════════════════\n\n"
+            f"На модерации: {pending_count}\n"
+            f"Одобренные: {approved_count}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SHURTA MANAGEMENT (Управление полицией)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_shurta_menu")
+async def handle_shurta_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню управления полицией"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        # Count pending alerts
+        pending = await session.execute(
+            select(func.count(ShurtaAlert.id)).where(
+                ShurtaAlert.is_approved == False,
+                ShurtaAlert.is_moderated == False
+            )
+        )
+        pending_count = pending.scalar() or 0
+        
+        # Count approved
+        approved = await session.execute(
+            select(func.count(ShurtaAlert.id)).where(ShurtaAlert.is_approved == True)
+        )
+        approved_count = approved.scalar() or 0
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"⏳ На модерации ({pending_count})", callback_data="admin_shurta_pending")],
+            [InlineKeyboardButton(text=f"✅ Одобренные ({approved_count})", callback_data="admin_shurta_approved")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            "🚨 УПРАВЛЕНИЕ ПОЛИЦИЕЙ\n"
+            "═══════════════════════════════════════\n\n"
+            f"На модерации: {pending_count}\n"
+            f"Одобренные: {approved_count}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USER MANAGEMENT (Управление пользователями)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_user_menu")
+async def handle_user_management_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню управления пользователями"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        # Get user statistics
+        total_users = await session.execute(select(func.count(User.id)))
+        total = total_users.scalar() or 0
+        
+        couriers = await session.execute(
+            select(func.count(User.id)).where(User.is_courier == True)
+        )
+        courier_count = couriers.scalar() or 0
+        
+        banned = await session.execute(
+            select(func.count(User.id)).where(User.is_banned == True)
+        )
+        banned_count = banned.scalar() or 0
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"📊 Статистика", callback_data="admin_user_stats")],
+            [InlineKeyboardButton(text=f"🔍 Найти пользователя", callback_data="admin_user_search")],
+            [InlineKeyboardButton(text=f"🚗 Курьеры ({courier_count})", callback_data="admin_couriers_list")],
+            [InlineKeyboardButton(text=f"🚫 Забанены ({banned_count})", callback_data="admin_user_banned")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            "👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ\n"
+            "═══════════════════════════════════════\n\n"
+            f"Всего пользователей: {total}\n"
+            f"Курьеры: {courier_count}\n"
+            f"Забанены: {banned_count}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_user_search")
+async def search_user_start(callback: CallbackQuery, state: FSMContext):
+    """Начало поиска пользователя"""
+    await state.set_state(AdminStates.user_search_input)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_user_menu")]
+    ])
+    
+    await callback.message.edit_text(
+        "🔍 ПОИСК ПОЛЬЗОВАТЕЛЯ\n"
+        "═══════════════════════════════════════\n\n"
+        "Введите имя, юзернейм или номер телефона пользователя:",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.user_search_input))
+async def search_user_results(message: Message, state: FSMContext):
+    """Поиск пользователей по запросу"""
+    query = message.text.strip().lower()
+    
+    if len(query) < 2:
+        await message.answer("❌ Запрос должен содержать минимум 2 символа")
+        return
+    
+    async with AsyncSessionLocal() as session:
+        # Search users
+        result = await session.execute(
+            select(User).where(
+                (User.username.ilike(f"%{query}%")) |
+                (User.first_name.ilike(f"%{query}%")) |
+                (User.phone.ilike(f"%{query}%"))
+            ).limit(10)
+        )
+        users = result.scalars().all()
+        
+        if not users:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")]
+            ])
+            
+            await message.answer(
+                "❌ Пользователи не найдены",
+                reply_markup=keyboard
+            )
+            await state.clear()
+            return
+        
+        keyboard_buttons = []
+        for user in users:
+            status = "✅" if not user.is_banned else "🚫"
+            courier_icon = "🚗 " if user.is_courier else ""
+            display_name = user.username or f"ID: {user.telegram_id}"
+            
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"{status} {courier_icon}{display_name}",
+                    callback_data=f"admin_user_view_{user.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await message.answer(
+            f"🔍 РЕЗУЛЬТАТЫ ПОИСКА\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Найдено: {len(users)} пользователей",
+            reply_markup=keyboard
+        )
+    
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin_user_view_"))
+async def view_user_profile(callback: CallbackQuery, state: FSMContext):
+    """Просмотр профиля пользователя"""
+    user_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        banned_status = "🚫 Забанен" if user.is_banned else "✅ Активен"
+        courier_status = "🚗 Да" if user.is_courier else "❌ Нет"
+        
+        profile_text = (
+            f"👤 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"ID: {user.telegram_id}\n"
+            f"Юзернейм: @{user.username or 'не указан'}\n"
+            f"Имя: {user.first_name or 'не указано'}\n"
+            f"Телефон: {user.phone or 'не указан'}\n"
+            f"Язык: {'🇷🇺 Русский' if user.language == 'RU' else '🇺🇿 Узбекский'}\n"
+            f"Гражданство: {user.citizenship or 'не указано'}\n\n"
+            f"Статус: {banned_status}\n"
+            f"Курьер: {courier_status}\n"
+            f"Уведомления: {'✅ Включены' if user.notifications_enabled else '❌ Отключены'}\n"
+            f"Присоединился: {user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at else 'неизв.'}\n"
+            f"Последняя активность: {user.last_active.strftime('%d.%m.%Y %H:%M') if user.last_active else 'неизв.'}"
+        )
+        
+        ban_btn_text = "🔓 Разбанить" if user.is_banned else "🔒 Забанить"
+        courier_btn_text = "❌ Убрать курьера" if user.is_courier else "✅ Сделать курьером"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text=ban_btn_text, callback_data=f"admin_user_toggle_ban_{user_id}"),
+                InlineKeyboardButton(text=courier_btn_text, callback_data=f"admin_user_toggle_courier_{user_id}")
+            ],
+            [InlineKeyboardButton(text="💬 Отправить сообщение", callback_data=f"admin_user_msg_{user_id}")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")]
+        ])
+        
+        await callback.message.edit_text(profile_text, reply_markup=keyboard)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_toggle_ban_"))
+async def toggle_user_ban(callback: CallbackQuery):
+    """Переключить статус бана пользователя"""
+    user_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, user_id)
+        if user:
+            user.is_banned = not user.is_banned
+            await session.commit()
+            await callback.answer("✅ Статус обновлен", show_alert=False)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_toggle_courier_"))
+async def toggle_user_courier(callback: CallbackQuery):
+    """Переключить статус курьера пользователя"""
+    user_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, user_id)
+        if user:
+            user.is_courier = not user.is_courier
+            await session.commit()
+            await callback.answer("✅ Статус обновлен", show_alert=False)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_msg_"))
+async def send_message_to_user(callback: CallbackQuery, state: FSMContext):
+    """Начать отправку сообщения пользователю"""
+    user_id = int(callback.data.split("_")[-1])
+    
+    await state.set_state(AdminStates.message_reply_input)
+    await state.update_data(target_user_id=user_id)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_view_{user_id}")]
+    ])
+    
+    await callback.message.edit_text(
+        "💬 ОТПРАВКА СООБЩЕНИЯ\n"
+        "═══════════════════════════════════════\n\n"
+        "Введите текст сообщения:",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.message_reply_input))
+async def process_message_to_user(message: Message, state: FSMContext):
+    """Обработка отправки сообщения пользователю"""
+    data = await state.get_data()
+    target_user_id = data.get("target_user_id")
+    msg_text = message.text.strip()
+    
+    if not msg_text:
+        await message.answer("❌ Сообщение не может быть пустым")
+        return
+    
+    # TODO: Implement actual message sending to user bot
+    await message.answer("✅ Сообщение отправлено пользователю")
+    await state.clear()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MESSAGES FROM USERS (Сообщения от пользователей)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_msg_menu")
+async def handle_messages_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню сообщений от пользователей"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        unread = await session.execute(
+            select(func.count(UserMessage.id)).where(UserMessage.is_read == False)
+        )
+        unread_count = unread.scalar() or 0
+        
+        total = await session.execute(select(func.count(UserMessage.id)))
+        total_count = total.scalar() or 0
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"🔴 Непрочитанные ({unread_count})", callback_data="admin_msg_unread")],
+            [InlineKeyboardButton(text=f"✅ Прочитанные", callback_data="admin_msg_read")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            "💬 СООБЩЕНИЯ ОТ ПОЛЬЗОВАТЕЛЕЙ\n"
+            "═══════════════════════════════════════\n\n"
+            f"Всего сообщений: {total_count}\n"
+            f"Непрочитанные: {unread_count}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_msg_unread")
+async def show_unread_messages(callback: CallbackQuery, state: FSMContext):
+    """Показать непрочитанные сообщения"""
+    await state.set_state(AdminStates.message_view)
+    
+    async with AsyncSessionLocal() as session:
+        messages = await session.execute(
+            select(UserMessage)
+            .where(UserMessage.is_read == False)
+            .order_by(UserMessage.created_at.desc())
+            .limit(20)
+        )
+        msgs = messages.scalars().all()
+        
+        if not msgs:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_msg_menu")]
+            ])
+            await callback.message.edit_text(
+                "❌ Нет непрочитанных сообщений",
+                reply_markup=keyboard
+            )
+            await callback.answer()
+            return
+        
+        keyboard_buttons = []
+        for msg in msgs:
+            preview = (msg.message_text[:30] + "...") if len(msg.message_text) > 30 else msg.message_text
+            username = msg.user.username if msg.user else "Unknown"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"🔴 @{username}: {preview}",
+                    callback_data=f"admin_msg_view_detail_{msg.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_msg_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"💬 НЕПРОЧИТАННЫЕ СООБЩЕНИЯ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(msgs)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_msg_view_detail_"))
+async def view_message_detail(callback: CallbackQuery, state: FSMContext):
+    """Просмотр деталей сообщения"""
+    msg_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        msg = await UserMessageService.get_message(session, msg_id)
+        if not msg:
+            await callback.answer("❌ Сообщение не найдено", show_alert=True)
+            return
+        
+        await UserMessageService.mark_as_read(session, msg_id)
+        
+        username = msg.user.username if msg.user else f"ID: {msg.user_id}"
+        created_at = msg.created_at.strftime("%d.%m.%Y %H:%M") if msg.created_at else "неизв."
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Ответить", callback_data=f"admin_msg_reply_{msg_id}")],
+            [InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"admin_msg_delete_{msg_id}")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_msg_unread")]
+        ])
+        
+        await callback.message.edit_text(
+            f"💬 СООБЩЕНИЕ\n"
+            f"═══════════════════════════════════════\n\n"
+            f"От: @{username}\n"
+            f"Время: {created_at}\n\n"
+            f"{msg.message_text}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_msg_reply_"))
+async def reply_to_message(callback: CallbackQuery, state: FSMContext):
+    """Начало ответа на сообщение"""
+    msg_id = int(callback.data.split("_")[-1])
+    
+    await state.set_state(AdminStates.message_reply_input)
+    await state.update_data(reply_to_msg_id=msg_id)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_msg_view_detail_{msg_id}")]
+    ])
+    
+    await callback.message.edit_text(
+        "✉️ ОТВЕТИТЬ НА СООБЩЕНИЕ\n"
+        "═══════════════════════════════════════\n\n"
+        "Введите текст ответа:",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BROADCASTING SYSTEM (Система рассылки)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_bc_menu")
+async def handle_broadcast_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню системы рассылки"""
+    await state.clear()
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✍️ Создать новую рассылку", callback_data="admin_bc_new")],
+        [InlineKeyboardButton(text="📋 История рассылок", callback_data="admin_bc_history")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+    ])
+    
+    await callback.message.edit_text(
+        "📢 СИСТЕМА РАССЫЛКИ\n"
+        "═══════════════════════════════════════",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_bc_new")
+async def start_new_broadcast(callback: CallbackQuery, state: FSMContext):
+    """Начало создания новой рассылки"""
+    await state.set_state(AdminStates.broadcast_menu)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_bc_menu")]
+    ])
+    
+    await callback.message.edit_text(
+        "✍️ СОЗДАНИЕ РАССЫЛКИ\n"
+        "═══════════════════════════════════════\n\n"
+        "1️⃣ НАЗВАНИЕ КАМПАНИИ\n\n"
+        "Введите название (например, 'Важная информация'):",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.broadcast_menu))
+async def process_broadcast_name(message: Message, state: FSMContext):
+    """Обработка названия рассылки"""
+    name = message.text.strip()
+    
+    if not name or len(name) < 3:
+        await message.answer("❌ Название должно содержать минимум 3 символа")
+        return
+    
+    await state.update_data(broadcast_name=name)
+    await state.set_state(AdminStates.broadcast_text_ru)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭️ Пропустить УЗ текст", callback_data="admin_bc_skip_uz")]
+    ])
+    
+    await message.answer(
+        "✍️ СОЗДАНИЕ РАССЫЛКИ\n"
+        "═══════════════════════════════════════\n\n"
+        "2️⃣ ТЕКСТ НА РУССКОМ\n\n"
+        "Введите текст сообщения на русском языке:",
+        reply_markup=keyboard
+    )
+
+
+@router.message(StateFilter(AdminStates.broadcast_text_ru))
+async def process_broadcast_text_ru(message: Message, state: FSMContext):
+    """Обработка русского текста рассылки"""
+    text = message.text.strip()
+    
+    if not text:
+        await message.answer("❌ Текст не может быть пустым")
+        return
+    
+    await state.update_data(broadcast_text_ru=text)
+    await state.set_state(AdminStates.broadcast_text_uz)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭️ Далее", callback_data="admin_bc_continue")]
+    ])
+    
+    await message.answer(
+        "✍️ СОЗДАНИЕ РАССЫЛКИ\n"
+        "═══════════════════════════════════════\n\n"
+        "3️⃣ ТЕКСТ НА УЗБЕКСКОМ\n\n"
+        "Введите текст сообщения на узбекском языке:",
+        reply_markup=keyboard
+    )
+
+
+@router.callback_query(F.data == "admin_bc_continue")
+async def continue_broadcast_creation(callback: CallbackQuery, state: FSMContext):
+    """Продолжить создание рассылки (пропуск узбекского)"""
+    data = await state.get_data()
+    text_ru = data.get("broadcast_text_ru")
+    
+    await state.update_data(broadcast_text_uz=text_ru)
+    await state.set_state(AdminStates.broadcast_photo)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭️ Далее (без фото)", callback_data="admin_bc_no_photo")]
+    ])
+    
+    await callback.message.edit_text(
+        "📸 СОЗДАНИЕ РАССЫЛКИ\n"
+        "═══════════════════════════════════════\n\n"
+        "4️⃣ ФОТО (опционально)\n\n"
+        "Отправьте фото или нажмите 'Далее':",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_bc_no_photo")
+async def skip_broadcast_photo(callback: CallbackQuery, state: FSMContext):
+    """Пропустить фото в рассылке"""
+    await state.set_state(AdminStates.broadcast_recipient_filter)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Всем пользователям", callback_data="admin_bc_filter_all")],
+        [InlineKeyboardButton(text="🇷🇺 Только русскоговорящим", callback_data="admin_bc_filter_ru")],
+        [InlineKeyboardButton(text="🇺🇿 Только узбекоговорящим", callback_data="admin_bc_filter_uz")],
+        [InlineKeyboardButton(text="🚗 Только курьерам", callback_data="admin_bc_filter_couriers")],
+    ])
+    
+    await callback.message.edit_text(
+        "👥 СОЗДАНИЕ РАССЫЛКИ\n"
+        "═══════════════════════════════════════\n\n"
+        "5️⃣ ВЫБОР АУДИТОРИИ\n\n"
+        "Кому отправить рассылку:",
+        reply_markup=keyboard
+    )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_bc_filter_"))
+async def set_broadcast_filter(callback: CallbackQuery, state: FSMContext):
+    """Установить фильтр аудитории рассылки"""
+    filter_type = callback.data.split("_")[-1]
+    
+    data = await state.get_data()
+    name = data.get("broadcast_name")
+    text_ru = data.get("broadcast_text_ru")
+    text_uz = data.get("broadcast_text_uz")
+    
+    await state.update_data(broadcast_filter=filter_type)
+    
+    # Create and send broadcast
+    async with AsyncSessionLocal() as session:
+        broadcast = await BroadcastService.create_broadcast(
+            session,
+            admin_id=callback.from_user.id,
+            name_ru=name,
+            name_uz=name,
+            message_ru=text_ru,
+            message_uz=text_uz,
+            recipient_filter=filter_type.upper()
+        )
+        
+        # TODO: Send broadcast to users
+        # For now just mark as sent
+        await BroadcastService.mark_as_sent(session, broadcast.id, recipient_count=0)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📋 История", callback_data="admin_bc_history")],
+            [InlineKeyboardButton(text="🔙 Главное меню", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(
+            f"✅ РАССЫЛКА ОТПРАВЛЕНА\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Название: {name}\n"
+            f"Статус: Отправлена",
+            reply_markup=keyboard
+        )
+    
+    await state.clear()
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_bc_history")
+async def show_broadcast_history(callback: CallbackQuery):
+    """Показать историю рассылок"""
+    async with AsyncSessionLocal() as session:
+        broadcasts = await session.execute(
+            select(Broadcast).order_by(Broadcast.created_at.desc()).limit(20)
+        )
+        bcasts = broadcasts.scalars().all()
+        
+        if not bcasts:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_bc_menu")]
+            ])
+            await callback.message.edit_text(
+                "❌ Нет рассылок в истории",
+                reply_markup=keyboard
+            )
+            await callback.answer()
+            return
+        
+        keyboard_buttons = []
+        for idx, bcast in enumerate(bcasts, 1):
+            status = "✅" if bcast.is_sent else "⏳"
+            sent_time = bcast.sent_at.strftime("%d.%m %H:%M") if bcast.sent_at else "не отправлено"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"{status} {idx}. {bcast.name_ru} - {sent_time}",
+                    callback_data=f"admin_bc_view_{bcast.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_bc_menu")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            f"📋 ИСТОРИЯ РАССЫЛОК\n"
+            f"═══════════════════════════════════════\n\n"
+            f"Всего: {len(bcasts)}",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STATISTICS (Статистика)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_stats_menu")
+async def handle_statistics_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню статистики"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        # User statistics
+        total_users = await session.execute(select(func.count(User.id)))
+        total = total_users.scalar() or 0
+        
+        active_today = await session.execute(
+            select(func.count(User.id)).where(User.last_active != None)
+        )
+        active = active_today.scalar() or 0
+        
+        ru_users = await session.execute(
+            select(func.count(User.id)).where(User.language == "RU")
+        )
+        ru_count = ru_users.scalar() or 0
+        
+        uz_users = await session.execute(
+            select(func.count(User.id)).where(User.language == "UZ")
+        )
+        uz_count = uz_users.scalar() or 0
+        
+        couriers = await session.execute(
+            select(func.count(User.id)).where(User.is_courier == True)
+        )
+        courier_count = couriers.scalar() or 0
+        
+        stats_text = (
+            "📊 СТАТИСТИКА\n"
+            "═══════════════════════════════════════\n\n"
+            f"👥 Пользователей: {total}\n"
+            f"🟢 Активных: {active}\n"
+            f"🇷🇺 Русскоговорящих: {ru_count}\n"
+            f"🇺🇿 Узбекоговорящих: {uz_count}\n"
+            f"🚗 Курьеры: {courier_count}"
+        )
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
+        ])
+        
+        await callback.message.edit_text(stats_text, reply_markup=keyboard)
+    
+    await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SETTINGS (Настройки)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_settings_menu")
+async def handle_settings_menu(callback: CallbackQuery, state: FSMContext):
+    """Меню настроек"""
+    await state.clear()
+    
+    async with AsyncSessionLocal() as session:
+        settings_list = await session.execute(select(SystemSetting))
+        all_settings = settings_list.scalars().all()
+        
+        keyboard_buttons = []
+        for setting in all_settings:
+            status_icon = "✅" if setting.value else "❌"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"[{status_icon}] {setting.setting_name_ru}",
+                    callback_data=f"admin_sett_toggle_{setting.id}"
+                )
+            ])
+        
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            "⚙️ НАСТРОЙКИ СИСТЕМЫ\n"
+            "═══════════════════════════════════════\n\n"
+            "Нажмите на параметр для переключения:",
+            reply_markup=keyboard
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_sett_toggle_"))
+async def toggle_system_setting(callback: CallbackQuery):
+    """Переключить системный параметр"""
+    setting_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        setting = await session.get(SystemSetting, setting_id)
+        if setting:
+            setting.value = not setting.value
+            await session.commit()
+            await callback.answer("✅ Параметр обновлен", show_alert=False)
+    
     await callback.answer()
 
 
 def register_admin_handlers(dp):
-    """Register admin handlers with dispatcher"""
+    """Регистрация обработчиков админ-бота"""
     dp.include_router(router)

@@ -138,13 +138,9 @@ class AdminStates(StatesGroup):
     
     # Legacy states for compatibility
     managing_buttons = State()
-    adding_button = State()
     button_text_ru = State()
     button_text_uz = State()
-    button_url = State()
-    button_photo = State()
     button_file = State()
-    button_geo = State()
     
     # Delivery management (Dostavka xizmati)
     delivery_management = State()
@@ -205,15 +201,6 @@ class AdminStates(StatesGroup):
     # Legacy states for compatibility
     viewing_propaja_item = State()
     viewing_shurta_item = State()
-    searching_user = State()
-    user_details = State()
     viewing_message = State()
     replying_message = State()
     broadcast_creation = State()
-    broadcast_text_ru = State()
-    broadcast_text_uz = State()
-    broadcast_photo = State()
-    broadcast_recipient_filter = State()
-    creating_telegraph = State()
-    telegraph_title = State()
-    telegraph_content = State()
