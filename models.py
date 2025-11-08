@@ -335,7 +335,7 @@ class ModerationQueue(Base):
     entity_id = Column(Integer, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(String(20), default="PENDING")  # PENDING, APPROVED, REJECTED
-    moderator_id = Column(Integer, nullable=True)
+    moderator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     moderator_comment = Column(Text, nullable=True)
     admin_message_id = Column(Integer, nullable=True)  # Message ID in admin chat
     created_at = Column(DateTime, default=datetime.utcnow)
