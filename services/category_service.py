@@ -1,102 +1,456 @@
+"""
+Сервис управления категориями - Category Management Service
+"""
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional, Dict
+from sqlalchemy.orm import joinedload, selectinload
+from typing import List, Optional, Dict, Any
+from models import Category, CategoryButton
 from utils.logger import logger
 
 
 class CategoryService:
-    """Service for category management - DEPRECATED
-    
-    Note: Category, CategoryContent, and InlineButton models are not defined in models.py
-    This service is kept for reference but cannot be used until the corresponding models are added.
-    """
+    """Service for category management"""
     
     @staticmethod
     async def create_category(
         session: AsyncSession,
+        key: str,
         name_ru: str,
         name_uz: str,
+        icon: str = None,
+        parent_id: int = None,
         **kwargs
-    ):
-        """Create new category - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+    ) -> Category:
+        """
+        Создать новую категорию
+        Create new category
+        """
+        try:
+            logger.info(f"[CategoryService] Создание категории: {key}")
+            
+            category = Category(
+                key=key,
+                name_ru=name_ru,
+                name_uz=name_uz,
+                icon=icon,
+                parent_id=parent_id,
+                **kwargs
+            )
+            
+            session.add(category)
+            await session.commit()
+            await session.refresh(category)
+            
+            logger.info(f"[CategoryService] ✅ Категория создана: {category.id}")
+            return category
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка создания категории: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
     
     @staticmethod
-    async def get_category(session: AsyncSession, category_id: int):
-        """Get category by ID - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+    async def get_category(session: AsyncSession, category_id: int) -> Optional[Category]:
+        """
+        Получить категорию по ID
+        Get category by ID
+        """
+        try:
+            result = await session.execute(
+                select(Category)
+                .options(
+                    selectinload(Category.children),
+                    selectinload(Category.buttons)
+                )
+                .where(Category.id == category_id)
+            )
+            category = result.scalar_one_or_none()
+            
+            if category:
+                logger.info(f"[CategoryService] Категория найдена: {category.id} - {category.name_ru}")
+            else:
+                logger.warning(f"[CategoryService] Категория {category_id} не найдена")
+            
+            return category
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения категории: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    async def get_category_by_key(session: AsyncSession, key: str) -> Optional[Category]:
+        """
+        Получить категорию по ключу
+        Get category by key
+        """
+        try:
+            result = await session.execute(
+                select(Category)
+                .options(
+                    selectinload(Category.children),
+                    selectinload(Category.buttons)
+                )
+                .where(Category.key == key)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения категории по ключу: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     async def get_all_categories(
         session: AsyncSession,
-        active_only: bool = True,
-        citizenship: str = None
-    ) -> List:
-        """Get all categories - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+        active_only: bool = True
+    ) -> List[Category]:
+        """
+        Получить все категории
+        Get all categories
+        """
+        try:
+            query = select(Category).options(
+                selectinload(Category.children),
+                selectinload(Category.buttons)
+            )
+            
+            if active_only:
+                query = query.where(Category.is_active == True)
+            
+            query = query.order_by(Category.order_index, Category.id)
+            
+            result = await session.execute(query)
+            categories = result.scalars().all()
+            
+            logger.info(f"[CategoryService] Найдено категорий: {len(categories)}")
+            return categories
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения категорий: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     async def get_root_categories(
         session: AsyncSession,
-        active_only: bool = True,
-        citizenship: str = None
-    ) -> List:
-        """Get root categories - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+        active_only: bool = True
+    ) -> List[Category]:
+        """
+        Получить корневые категории (без родителя)
+        Get root categories (without parent)
+        """
+        try:
+            query = select(Category).options(
+                selectinload(Category.children),
+                selectinload(Category.buttons)
+            ).where(Category.parent_id == None)
+            
+            if active_only:
+                query = query.where(Category.is_active == True)
+            
+            query = query.order_by(Category.order_index, Category.id)
+            
+            result = await session.execute(query)
+            categories = result.scalars().all()
+            
+            logger.info(f"[CategoryService] Найдено корневых категорий: {len(categories)}")
+            return categories
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения корневых категорий: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     async def get_subcategories(
         session: AsyncSession,
         parent_id: int,
-        active_only: bool = True,
-        citizenship: str = None
-    ) -> List:
-        """Get subcategories - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+        active_only: bool = True
+    ) -> List[Category]:
+        """
+        Получить подкатегории
+        Get subcategories
+        """
+        try:
+            query = select(Category).options(
+                selectinload(Category.children),
+                selectinload(Category.buttons)
+            ).where(Category.parent_id == parent_id)
+            
+            if active_only:
+                query = query.where(Category.is_active == True)
+            
+            query = query.order_by(Category.order_index, Category.id)
+            
+            result = await session.execute(query)
+            categories = result.scalars().all()
+            
+            logger.info(f"[CategoryService] Найдено подкатегорий для {parent_id}: {len(categories)}")
+            return categories
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения подкатегорий: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     async def update_category(
         session: AsyncSession,
         category_id: int,
         **kwargs
-    ):
-        """Update category - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+    ) -> Optional[Category]:
+        """
+        Обновить категорию
+        Update category
+        """
+        try:
+            category = await CategoryService.get_category(session, category_id)
+            if not category:
+                logger.warning(f"[CategoryService] Категория {category_id} не найдена для обновления")
+                return None
+            
+            for key, value in kwargs.items():
+                if hasattr(category, key):
+                    setattr(category, key, value)
+            
+            await session.commit()
+            await session.refresh(category)
+            
+            logger.info(f"[CategoryService] ✅ Категория {category_id} обновлена")
+            return category
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка обновления категории: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
     
     @staticmethod
     async def delete_category(
         session: AsyncSession,
-        category_id: int,
-        soft: bool = True
-    ) -> bool:
-        """Delete category - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
-    
-    @staticmethod
-    async def toggle_category(session: AsyncSession, category_id: int):
-        """Toggle category - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
-    
-    @staticmethod
-    async def get_category_content(
-        session: AsyncSession,
         category_id: int
-    ) -> List:
-        """Get category content - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+    ) -> bool:
+        """
+        Удалить категорию
+        Delete category
+        """
+        try:
+            category = await CategoryService.get_category(session, category_id)
+            if not category:
+                logger.warning(f"[CategoryService] Категория {category_id} не найдена для удаления")
+                return False
+            
+            await session.delete(category)
+            await session.commit()
+            
+            logger.info(f"[CategoryService] ✅ Категория {category_id} удалена")
+            return True
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка удаления категории: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
     
     @staticmethod
-    async def add_content(
+    async def toggle_category(session: AsyncSession, category_id: int) -> Optional[Category]:
+        """
+        Переключить активность категории (on/off)
+        Toggle category active state
+        """
+        try:
+            category = await CategoryService.get_category(session, category_id)
+            if not category:
+                logger.warning(f"[CategoryService] Категория {category_id} не найдена для переключения")
+                return None
+            
+            category.is_active = not category.is_active
+            await session.commit()
+            await session.refresh(category)
+            
+            status = "включена" if category.is_active else "выключена"
+            logger.info(f"[CategoryService] ✅ Категория {category_id} {status}")
+            return category
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка переключения категории: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
+    
+    @staticmethod
+    async def add_button(
         session: AsyncSession,
         category_id: int,
+        text_ru: str,
+        text_uz: str,
+        button_type: str,
+        button_value: str,
+        order_index: int = 0
+    ) -> CategoryButton:
+        """
+        Добавить кнопку к категории
+        Add button to category
+        """
+        try:
+            button = CategoryButton(
+                category_id=category_id,
+                text_ru=text_ru,
+                text_uz=text_uz,
+                button_type=button_type,
+                button_value=button_value,
+                order_index=order_index
+            )
+            
+            session.add(button)
+            await session.commit()
+            await session.refresh(button)
+            
+            logger.info(f"[CategoryService] ✅ Кнопка добавлена к категории {category_id}")
+            return button
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка добавления кнопки: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
+    
+    @staticmethod
+    async def update_button(
+        session: AsyncSession,
+        button_id: int,
         **kwargs
-    ):
-        """Add content to category - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+    ) -> Optional[CategoryButton]:
+        """
+        Обновить кнопку категории
+        Update category button
+        """
+        try:
+            result = await session.execute(
+                select(CategoryButton).where(CategoryButton.id == button_id)
+            )
+            button = result.scalar_one_or_none()
+            if not button:
+                logger.warning(f"[CategoryService] Кнопка {button_id} не найдена")
+                return None
+            
+            for key, value in kwargs.items():
+                if hasattr(button, key):
+                    setattr(button, key, value)
+            
+            await session.commit()
+            await session.refresh(button)
+            
+            logger.info(f"[CategoryService] ✅ Кнопка {button_id} обновлена")
+            return button
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка обновления кнопки: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
+    
+    @staticmethod
+    async def delete_button(session: AsyncSession, button_id: int) -> bool:
+        """
+        Удалить кнопку категории
+        Delete category button
+        """
+        try:
+            result = await session.execute(
+                select(CategoryButton).where(CategoryButton.id == button_id)
+            )
+            button = result.scalar_one_or_none()
+            if not button:
+                logger.warning(f"[CategoryService] Кнопка {button_id} не найдена для удаления")
+                return False
+            
+            await session.delete(button)
+            await session.commit()
+            
+            logger.info(f"[CategoryService] ✅ Кнопка {button_id} удалена")
+            return True
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка удаления кнопки: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
+    
+    @staticmethod
+    async def ensure_default_categories(session: AsyncSession) -> List[Category]:
+        """
+        Убедиться, что базовые категории существуют
+        Ensure that default categories exist
+        """
+        default_categories = [
+            {"key": "talim", "name_ru": "📚 Talim", "name_uz": "📚 Talim", "icon": "📚", "order_index": 1},
+            {"key": "dostavka", "name_ru": "🚚 Dostavka", "name_uz": "🚚 Dostavka", "icon": "🚚", "order_index": 2},
+            {"key": "yoqolgan", "name_ru": "🔔 Yoqolgan", "name_uz": "🔔 Yoqolgan", "icon": "🔔", "order_index": 3},
+            {"key": "shurta", "name_ru": "🚨 Shurta", "name_uz": "🚨 Shurta", "icon": "🚨", "order_index": 4},
+            {"key": "sozlamalar", "name_ru": "⚙️ Sozlamalar", "name_uz": "⚙️ Sozlamalar", "icon": "⚙️", "order_index": 5},
+            {"key": "admin", "name_ru": "💬 Admin", "name_uz": "💬 Admin", "icon": "💬", "order_index": 6},
+            {"key": "settings", "name_ru": "⚙️ Settings", "name_uz": "⚙️ Settings", "icon": "⚙️", "order_index": 7},
+        ]
+        
+        created_categories = []
+        for cat_data in default_categories:
+            existing = await CategoryService.get_category_by_key(session, cat_data["key"])
+            if not existing:
+                category = await CategoryService.create_category(
+                    session,
+                    key=cat_data["key"],
+                    name_ru=cat_data["name_ru"],
+                    name_uz=cat_data["name_uz"],
+                    icon=cat_data.get("icon"),
+                    order_index=cat_data.get("order_index", 0)
+                )
+                created_categories.append(category)
+        
+        if created_categories:
+            logger.info(f"[CategoryService] ✅ Созданы базовые категории: {[c.key for c in created_categories]}")
+        
+        # Возвращаем актуальный список корневых категорий
+        return await CategoryService.get_root_categories(session, active_only=False)
     
     @staticmethod
     async def get_category_tree(
         session: AsyncSession,
-        citizenship: str = None
-    ) -> Dict:
-        """Get full category tree - NOT IMPLEMENTED"""
-        raise NotImplementedError("Category model not defined in models.py")
+        active_only: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Получить дерево категорий со всеми уровнями
+        Get category tree with all levels
+        """
+        try:
+            root_categories = await CategoryService.get_root_categories(session, active_only=active_only)
+            tree = []
+            for root in root_categories:
+                tree.append(CategoryService._serialize_category(root, active_only=active_only))
+            return tree
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка построения дерева категорий: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    def _serialize_category(category: Category, active_only: bool = True) -> Dict[str, Any]:
+        """
+        Сериализация категории в словарь с вложенными данными
+        Serialize category to dict with nested data
+        """
+        children = [child for child in category.children if (child.is_active or not active_only)]
+        buttons = [button for button in category.buttons if (button.is_active or not active_only)]
+        
+        return {
+            "id": category.id,
+            "key": category.key,
+            "name_ru": category.name_ru,
+            "name_uz": category.name_uz,
+            "icon": category.icon,
+            "is_active": category.is_active,
+            "order_index": category.order_index,
+            "content_type": category.content_type,
+            "text_content_ru": category.text_content_ru,
+            "text_content_uz": category.text_content_uz,
+            "photo_file_id": category.photo_file_id,
+            "audio_file_id": category.audio_file_id,
+            "pdf_file_id": category.pdf_file_id,
+            "link_url": category.link_url,
+            "button_type": category.button_type,
+            "buttons": [
+                {
+                    "id": button.id,
+                    "text_ru": button.text_ru,
+                    "text_uz": button.text_uz,
+                    "button_type": button.button_type,
+                    "button_value": button.button_value,
+                    "order_index": button.order_index,
+                    "is_active": button.is_active
+                }
+                for button in buttons
+            ],
+            "children": [
+                CategoryService._serialize_category(child, active_only=active_only)
+                for child in children
+            ]
+        }

@@ -106,6 +106,20 @@ class AdminStates(StatesGroup):
     # Main menu
     admin_menu = State()
     
+    # Category management (New admin panel structure)
+    category_management = State()
+    category_list = State()
+    category_editing = State()
+    category_name_input = State()
+    category_text_input = State()
+    category_button_type_selection = State()  # inline, keyboard, or simple
+    category_media_management = State()
+    category_photo_upload = State()
+    category_audio_upload = State()
+    category_pdf_upload = State()
+    category_link_input = State()
+    category_subcategory_management = State()
+    
     # Documents management (Hujjat yordami)
     hujjat_menu = State()
     hujjat_citizenship_selection = State()
