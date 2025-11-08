@@ -1027,6 +1027,188 @@ async def show_approved_shurta_alerts(callback: CallbackQuery):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# MODERATION HANDLERS (Обработчики модерации из пользовательского бота)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("admin_approve_notif_"))
+async def approve_notification_from_user_bot(callback: CallbackQuery):
+    """Одобрить уведомление из пользовательского бота"""
+    logger.info(f"[approve_notification_from_user_bot] Начало | admin_id={callback.from_user.id}")
+    try:
+        notification_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user or not user.is_admin:
+                await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+                return
+            
+            notification = await NotificationService.approve_notification(
+                session,
+                notification_id,
+                user.id
+            )
+            
+            if notification:
+                # Отправить уведомление всем пользователям
+                all_users = await UserService.get_all_users(session)
+                for target_user in all_users:
+                    if target_user.notifications_enabled and target_user.id != notification.creator_id:
+                        try:
+                            alert_text = ModerationService.format_notification_for_user(
+                                notification, target_user.language
+                            )
+                            
+                            if notification.photo_file_id:
+                                await callback.bot.send_photo(
+                                    target_user.telegram_id,
+                                    photo=notification.photo_file_id,
+                                    caption=alert_text
+                                )
+                            else:
+                                await callback.bot.send_message(
+                                    target_user.telegram_id,
+                                    alert_text
+                                )
+                        except Exception as e:
+                            logger.error(f"Не удалось отправить пользователю {target_user.telegram_id}: {e}")
+                
+                await callback.message.edit_text("✅ Уведомление одобрено и отправлено пользователям")
+                await callback.answer("✅ Одобрено")
+                logger.info(f"[approve_notification_from_user_bot] ✅ Успешно")
+            else:
+                await callback.answer("❌ Уведомление не найдено", show_alert=True)
+                logger.error(f"[approve_notification_from_user_bot] ❌ Уведомление {notification_id} не найдено")
+    except Exception as e:
+        logger.error(f"[approve_notification_from_user_bot] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_reject_notif_"))
+async def reject_notification_from_user_bot(callback: CallbackQuery):
+    """Отклонить уведомление из пользовательского бота"""
+    logger.info(f"[reject_notification_from_user_bot] Начало | admin_id={callback.from_user.id}")
+    try:
+        notification_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user or not user.is_admin:
+                await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+                return
+            
+            notification = await NotificationService.reject_notification(
+                session,
+                notification_id,
+                user.id
+            )
+            
+            if notification:
+                await callback.message.edit_text("✅ Уведомление отклонено")
+                await callback.answer("✅ Отклонено")
+                logger.info(f"[reject_notification_from_user_bot] ✅ Успешно")
+            else:
+                await callback.answer("❌ Уведомление не найдено", show_alert=True)
+                logger.error(f"[reject_notification_from_user_bot] ❌ Уведомление {notification_id} не найдено")
+    except Exception as e:
+        logger.error(f"[reject_notification_from_user_bot] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_approve_shurta_"))
+async def approve_shurta_from_user_bot(callback: CallbackQuery):
+    """Одобрить алерт Shurta из пользовательского бота"""
+    logger.info(f"[approve_shurta_from_user_bot] Начало | admin_id={callback.from_user.id}")
+    try:
+        shurta_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user or not user.is_admin:
+                await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+                return
+            
+            alert = await ShurtaService.approve_alert(
+                session,
+                shurta_id,
+                user.id
+            )
+            
+            if alert:
+                # Отправить алерт всем пользователям
+                all_users = await UserService.get_all_users(session)
+                for target_user in all_users:
+                    if target_user.notifications_enabled and target_user.id != alert.creator_id:
+                        try:
+                            alert_text = ModerationService.format_shurta_for_user(
+                                alert, target_user.language
+                            )
+                            
+                            # Если есть геолокация - отправить как карту
+                            if alert.latitude and alert.longitude:
+                                await callback.bot.send_location(
+                                    chat_id=target_user.telegram_id,
+                                    latitude=alert.latitude,
+                                    longitude=alert.longitude
+                                )
+                            
+                            if alert.photo_file_id:
+                                await callback.bot.send_photo(
+                                    target_user.telegram_id,
+                                    photo=alert.photo_file_id,
+                                    caption=alert_text
+                                )
+                            else:
+                                await callback.bot.send_message(
+                                    target_user.telegram_id,
+                                    alert_text
+                                )
+                        except Exception as e:
+                            logger.error(f"Не удалось отправить пользователю {target_user.telegram_id}: {e}")
+                
+                await callback.message.edit_text("✅ Алерт Shurta одобрен и отправлен пользователям")
+                await callback.answer("✅ Одобрено")
+                logger.info(f"[approve_shurta_from_user_bot] ✅ Успешно")
+            else:
+                await callback.answer("❌ Алерт не найден", show_alert=True)
+                logger.error(f"[approve_shurta_from_user_bot] ❌ Алерт {shurta_id} не найден")
+    except Exception as e:
+        logger.error(f"[approve_shurta_from_user_bot] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_reject_shurta_"))
+async def reject_shurta_from_user_bot(callback: CallbackQuery):
+    """Отклонить алерт Shurta из пользовательского бота"""
+    logger.info(f"[reject_shurta_from_user_bot] Начало | admin_id={callback.from_user.id}")
+    try:
+        shurta_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user or not user.is_admin:
+                await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+                return
+            
+            alert = await ShurtaService.reject_alert(
+                session,
+                shurta_id,
+                user.id
+            )
+            
+            if alert:
+                await callback.message.edit_text("✅ Алерт Shurta отклонен")
+                await callback.answer("✅ Отклонено")
+                logger.info(f"[reject_shurta_from_user_bot] ✅ Успешно")
+            else:
+                await callback.answer("❌ Алерт не найден", show_alert=True)
+                logger.error(f"[reject_shurta_from_user_bot] ❌ Алерт {shurta_id} не найден")
+    except Exception as e:
+        logger.error(f"[reject_shurta_from_user_bot] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT (Управление пользователями)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1051,8 +1233,8 @@ async def handle_user_management_menu(callback: CallbackQuery, state: FSMContext
         banned_count = banned.scalar() or 0
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"📊 Статистика", callback_data="admin_user_stats")],
-            [InlineKeyboardButton(text=f"🔍 Найти пользователя", callback_data="admin_user_search")],
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_user_stats")],
+            [InlineKeyboardButton(text="🔍 Найти пользователя", callback_data="admin_select_user")],
             [InlineKeyboardButton(text=f"🚗 Курьеры ({courier_count})", callback_data="admin_couriers_list")],
             [InlineKeyboardButton(text=f"🚫 Забанены ({banned_count})", callback_data="admin_user_banned")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back_main")]
@@ -1070,85 +1252,80 @@ async def handle_user_management_menu(callback: CallbackQuery, state: FSMContext
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_user_search")
-async def search_user_start(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "admin_select_user")
+async def admin_select_user(callback: CallbackQuery, state: FSMContext):
     """Начало поиска пользователя"""
-    await state.set_state(AdminStates.user_search_input)
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_user_menu")]
-    ])
-    
-    await callback.message.edit_text(
-        "🔍 ПОИСК ПОЛЬЗОВАТЕЛЯ\n"
-        "═══════════════════════════════════════\n\n"
-        "Введите имя, юзернейм или номер телефона пользователя:",
-        reply_markup=keyboard
-    )
-    
-    await callback.answer()
+    logger.info(f"[admin_select_user] Начало | admin_id={callback.from_user.id}")
+    try:
+        await state.set_state(AdminStates.user_search_input)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_user_menu")]
+        ])
+        
+        await callback.message.edit_text(
+            "🔍 ПОИСК ПОЛЬЗОВАТЕЛЯ\n"
+            "═══════════════════════════════════════\n\n"
+            "Введите имя, юзернейм или номер телефона:",
+            reply_markup=keyboard
+        )
+        
+        await callback.answer()
+        logger.info(f"[admin_select_user] ✅ Успешно")
+    except Exception as e:
+        logger.error(f"[admin_select_user] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 @router.message(StateFilter(AdminStates.user_search_input))
-async def search_user_results(message: Message, state: FSMContext):
-    """Поиск пользователей по запросу"""
-    query = message.text.strip().lower()
-    
-    if len(query) < 2:
-        await message.answer("❌ Запрос должен содержать минимум 2 символа")
-        return
-    
-    async with AsyncSessionLocal() as session:
-        # Search users
-        result = await session.execute(
-            select(User).where(
-                (User.username.ilike(f"%{query}%")) |
-                (User.first_name.ilike(f"%{query}%")) |
-                (User.phone.ilike(f"%{query}%"))
-            ).limit(10)
-        )
-        users = result.scalars().all()
+async def search_users_live(message: Message, state: FSMContext):
+    """Живой поиск пользователей"""
+    logger.info(f"[search_users_live] Начало | query={message.text}")
+    try:
+        query = message.text.strip().lower()
         
-        if not users:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")]
-            ])
-            
-            await message.answer(
-                "❌ Пользователи не найдены",
-                reply_markup=keyboard
-            )
-            await state.clear()
+        if len(query) < 2:
+            await message.answer("⚠️ Минимум 2 символа для поиска")
             return
         
-        keyboard_buttons = []
+        async with AsyncSessionLocal() as session:
+            users = await UserService.search_users(session, query)
+        
+        if not users:
+            await message.answer("❌ Пользователей не найдено")
+            logger.info(f"[search_users_live] Пользователи не найдены")
+            return
+        
+        text = f"✅ НАЙДЕНО: {len(users)} пользователей\n\n"
+        buttons = []
+        
         for user in users:
-            status = "✅" if not user.is_banned else "🚫"
-            courier_icon = "🚗 " if user.is_courier else ""
-            display_name = user.username or f"ID: {user.telegram_id}"
+            status = "🟢 Онлайн" if user.is_online else "🟡 Оффлайн"
+            courier_badge = "🚗" if user.is_courier else "👤"
+            lang = "🇷🇺" if user.language == 'RU' else "🇺🇿"
+            last_active = user.last_active.strftime('%d.%m %H:%M') if user.last_active else 'N/A'
+            username_display = user.username or f"id{user.telegram_id}"
+            first_name_display = user.first_name or "—"
+            phone_display = user.phone or "—"
             
-            keyboard_buttons.append([
-                InlineKeyboardButton(
-                    text=f"{status} {courier_icon}{display_name}",
-                    callback_data=f"admin_user_view_{user.id}"
-                )
-            ])
+            text += f"{courier_badge} @{username_display} ({first_name_display})\n"
+            text += f"   📞 {phone_display} | {lang} | {status}\n"
+            text += f"   Активен: {last_active}\n\n"
+            
+            buttons.append([InlineKeyboardButton(
+                text=f"@{username_display}",
+                callback_data=f"admin_user_detail_{user.id}"
+            )])
         
-        keyboard_buttons.append([
-            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")
-        ])
+        buttons.append([InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_user_menu")])
         
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await message.answer(text, reply_markup=keyboard)
         
-        await message.answer(
-            f"🔍 РЕЗУЛЬТАТЫ ПОИСКА\n"
-            f"═══════════════════════════════════════\n\n"
-            f"Найдено: {len(users)} пользователей",
-            reply_markup=keyboard
-        )
-    
-    await state.clear()
-
+        logger.info(f"[search_users_live] ✅ Найдено {len(users)} пользователей")
+    except Exception as e:
+        logger.error(f"[search_users_live] ❌ Ошибка: {str(e)}", exc_info=True)
+        await message.answer("❌ Ошибка при поиске")
 
 @router.callback_query(F.data.startswith("admin_user_view_"))
 async def view_user_profile(callback: CallbackQuery, state: FSMContext):
@@ -1195,6 +1372,49 @@ async def view_user_profile(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text(profile_text, reply_markup=keyboard)
     
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_detail_"))
+async def show_user_detail(callback: CallbackQuery, state: FSMContext):
+    """Показать детали пользователя"""
+    logger.info(f"[show_user_detail] Начало | admin_id={callback.from_user.id}")
+    try:
+        user_id = int(callback.data.split('_')[3])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user_by_id(session, user_id)
+            
+            if not user:
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+            
+            text = f"ПОЛЬЗОВАТЕЛЬ: @{user.username or user.first_name}\n"
+            text += f"{'='*50}\n\n"
+            text += f"👤 {user.first_name or '—'}\n"
+            text += f"📞 {user.phone or '—'}\n"
+            text += f"🆔 {user.telegram_id}\n"
+            text += f"📅 Присоединился: {user.created_at.strftime('%d.%m.%Y') if user.created_at else '—'}\n\n"
+            
+            text += f"🌍 Язык: {'🇷🇺 Русский' if user.language == 'RU' else '🇺🇿 Узбекский'}\n"
+            text += f"🏠 Гражданство: {user.citizenship or '—'}\n"
+            text += f"🚗 Курьер: {'✅ Да' if user.is_courier else '❌ Нет'}\n"
+            text += f"🚫 Забанен: {'✅ Да' if user.is_banned else '❌ Нет'}\n\n"
+            
+            text += f"📊 АКТИВНОСТЬ:\n"
+            text += f"- Последний вход: {user.last_active.strftime('%d.%m %H:%M') if user.last_active else 'N/A'}\n\n"
+            
+            buttons = [
+                [InlineKeyboardButton(text="🚫 Забанить" if not user.is_banned else "✅ Разбанить", callback_data=f"admin_ban_user_{user_id}")],
+                [InlineKeyboardButton(text="🚗 Сделать курьером" if not user.is_courier else "❌ Убрать курьера", callback_data=f"admin_make_courier_{user_id}")],
+                [InlineKeyboardButton(text="💬 Отправить сообщение", callback_data=f"admin_msg_user_{user_id}")],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")]
+            ]
+            
+            await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+            logger.info(f"[show_user_detail] ✅ Детали показаны")
+    except Exception as e:
+        logger.error(f"[show_user_detail] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.answer("❌ Ошибка", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_user_toggle_ban_"))

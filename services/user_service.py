@@ -87,6 +87,18 @@ class UserService:
         return result.scalars().all()
     
     @staticmethod
+    async def get_all_admins(session: AsyncSession) -> List[User]:
+        """Get all active administrators"""
+        query = select(User).where(
+            User.is_admin == True,
+            User.is_banned == False
+        )
+        result = await session.execute(query)
+        admins = result.scalars().all()
+        logger.info(f"Загружено {len(admins)} администраторов для уведомлений")
+        return admins
+    
+    @staticmethod
     async def ban_user(session: AsyncSession, telegram_id: int) -> Optional[User]:
         """Ban user"""
         user = await UserService.get_user(session, telegram_id)
@@ -191,16 +203,33 @@ class UserService:
     @staticmethod
     async def search_users(
         session: AsyncSession,
-        query: str
+        query: str,
+        limit: int = 20
     ) -> List[User]:
-        """Search users by telegram_id, username, or first_name"""
+        """Search users by username, first name, phone or telegram ID"""
+        from sqlalchemy import or_
+        
+        like_query = f"%{query}%"
+        filters = [
+            User.username.ilike(like_query),
+            User.first_name.ilike(like_query)
+        ]
+        
+        if query.isdigit():
+            filters.append(User.telegram_id == int(query))
+        
+        # Add phone search if query looks like a phone number
+        if len(query) >= 4:
+            filters.append(User.phone.ilike(like_query))
+        
         search_query = select(User).where(
-            (User.username.ilike(f"%{query}%")) |
-            (User.first_name.ilike(f"%{query}%")) |
-            (User.telegram_id == int(query) if query.isdigit() else False)
-        )
+            or_(*filters)
+        ).order_by(User.last_active.desc()).limit(limit)
+        
         result = await session.execute(search_query)
-        return result.scalars().all()
+        users = result.scalars().all()
+        logger.info(f"Поиск пользователей по запросу '{query}' найдено {len(users)}")
+        return users
     
     @staticmethod
     async def update_user_language(
