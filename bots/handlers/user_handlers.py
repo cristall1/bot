@@ -185,15 +185,20 @@ async def show_document(callback: CallbackQuery):
         keyboard_buttons = []
         for btn in doc_buttons:
             btn_text = btn.text_ru if user.language == "RU" else btn.text_uz
-            keyboard_buttons.append([InlineKeyboardButton(text=btn_text, url=btn.url)])
+            if btn.button_type == "LINK":
+                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, url=btn.button_value)])
+            elif btn.button_type in ["PHOTO", "PDF", "AUDIO"]:
+                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_file_{btn.id}")])
+            elif btn.button_type == "GEO":
+                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_geo_{btn.id}")])
         
         keyboard_buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data=f"cit_{document.citizenship_scope}")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         # Send photo if available
-        if document.photo_url:
+        if document.photo_file_id:
             await callback.message.answer_photo(
-                photo=document.photo_url,
+                photo=document.photo_file_id,
                 caption=f"{title}\n\n{content}",
                 reply_markup=keyboard
             )
@@ -310,7 +315,8 @@ async def view_delivery_order(callback: CallbackQuery):
         
         text = f"📦 Заказ #{delivery.id}\n\n"
         text += f"📝 {delivery.description}\n"
-        text += f"📍 {delivery.location_info}\n"
+        location_display = delivery.address_text or f"{delivery.latitude},{delivery.longitude}" if delivery.latitude and delivery.longitude else delivery.maps_url or "не указано"
+        text += f"📍 {location_display}\n"
         text += f"📞 {delivery.phone}\n"
         text += f"⏰ {delivery.created_at}\n"
         
@@ -504,13 +510,35 @@ async def process_delivery_phone(message: Message, state: FSMContext):
             return
         
         data = await state.get_data()
-        
-        # Create delivery
+
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+
+        if location_type == "geo" and data.get("location"):
+            parts = data["location"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location"]
+        elif location_type == "maps":
+            maps_url = data.get("location")
+        else:
+            address_text = data.get("location")
+
         delivery = await DeliveryService.create_delivery(
             session,
             creator_id=user.id,
             description=data["description"],
-            location_info=data["location"],
+            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            maps_url=maps_url,
             phone=message.text
         )
         
@@ -932,16 +960,38 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
         
         data = await state.get_data()
         
-        # Create notification
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location"):
+            parts = data["location"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location"]
+        elif location_type == "maps":
+            maps_url = data.get("location")
+        else:
+            address_text = data.get("location")
+        
         notification = await NotificationService.create_notification(
             session,
             notification_type="PROPAJA_ODAM",
             creator_id=user.id,
             title=data["name"],
             description=data["description"],
-            location=data["location"],
+            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            maps_url=maps_url,
             phone=message.text,
-            photo_url=data.get("photo_url")
+            photo_file_id=data.get("photo_url")
         )
         
         # Notify all users
@@ -1162,16 +1212,38 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
         
         data = await state.get_data()
         
-        # Create notification
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location"):
+            parts = data["location"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location"]
+        elif location_type == "maps":
+            maps_url = data.get("location")
+        else:
+            address_text = data.get("location")
+        
         notification = await NotificationService.create_notification(
             session,
             notification_type="PROPAJA_NARSA",
             creator_id=user.id,
             title=data["what"],
             description=data["description"],
-            location=data["location"],
+            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            maps_url=maps_url,
             phone=message.text,
-            photo_url=data.get("photo_url")
+            photo_file_id=data.get("photo_url")
         )
         
         # Notify all users
@@ -1346,19 +1418,41 @@ async def process_shurta_photo(message: Message, state: FSMContext):
         if not user:
             return
         
-        photo_url = None
+        photo_file_id = None
         if message.photo:
-            photo_url = message.photo[-1].file_id
+            photo_file_id = message.photo[-1].file_id
         
         data = await state.get_data()
         
-        # Create alert
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location_info"):
+            parts = data["location_info"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location_info"]
+        elif location_type == "maps":
+            maps_url = data.get("location_info")
+        else:
+            address_text = data.get("location_info")
+        
         alert = await ShurtaService.create_alert(
             session,
             creator_id=user.id,
             description=data["description"],
-            location_info=data["location_info"],
-            photo_url=photo_url
+            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+            address_text=address_text,
+            latitude=latitude,
+            longitude=longitude,
+            maps_url=maps_url,
+            photo_file_id=photo_file_id
         )
         
         # Notify all users
@@ -1370,10 +1464,10 @@ async def process_shurta_photo(message: Message, state: FSMContext):
                                  description=data["description"],
                                  location=data["location_info"])
                     
-                    if photo_url:
+                    if photo_file_id:
                         await message.bot.send_photo(
                             target_user.telegram_id,
-                            photo=photo_url,
+                            photo=photo_file_id,
                             caption=alert_text
                         )
                     else:

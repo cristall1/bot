@@ -1,4 +1,5 @@
 from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import datetime
@@ -30,9 +31,11 @@ class UserMessageService:
     async def get_message(session: AsyncSession, message_id: int) -> Optional[UserMessage]:
         """Get message by ID"""
         result = await session.execute(
-            select(UserMessage).where(UserMessage.id == message_id)
+            select(UserMessage)
+            .options(joinedload(UserMessage.user))
+            .where(UserMessage.id == message_id)
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
     
     @staticmethod
     async def get_all_messages(
@@ -40,7 +43,7 @@ class UserMessageService:
         unread_only: bool = False
     ) -> List[UserMessage]:
         """Get all messages"""
-        query = select(UserMessage)
+        query = select(UserMessage).options(joinedload(UserMessage.user))
         
         if unread_only:
             query = query.where(UserMessage.is_read == False)
@@ -48,7 +51,7 @@ class UserMessageService:
         query = query.order_by(UserMessage.created_at.desc())
         
         result = await session.execute(query)
-        return result.scalars().all()
+        return result.unique().scalars().all()
     
     @staticmethod
     async def get_user_messages(session: AsyncSession, user_id: int) -> List[UserMessage]:
