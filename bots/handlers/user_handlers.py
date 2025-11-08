@@ -3,6 +3,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram import Dispatcher
+import asyncio
 
 from database import AsyncSessionLocal
 from locales import t
@@ -16,8 +17,127 @@ from services.user_message_service import UserMessageService
 from services.statistics_service import StatisticsService
 from utils.logger import logger
 import asyncio
+from config import settings
 
 router = Router()
+
+
+async def send_notification_to_admins_for_moderation(notification, bot):
+    """
+    Отправить уведомление всем администраторам для модерации
+    Send notification to all admins for moderation
+    """
+    logger.info(f"[send_notification_to_admins_for_moderation] Начало | notification_id={notification.id}")
+    try:
+        # Получить всех администраторов
+        async with AsyncSessionLocal() as session:
+            admins = await UserService.get_all_admins(session)
+            
+            for admin in admins:
+                try:
+                    text = f"🔔 НОВОЕ УВЕДОМЛЕНИЕ НА МОДЕРАЦИЮ\n"
+                    text += f"═══════════════════════════════════════\n\n"
+                    text += f"Тип: {notification.type}\n"
+                    text += f"Название: {notification.title}\n"
+                    text += f"Описание: {notification.description}\n"
+                    
+                    if notification.address_text:
+                        text += f"Место: {notification.address_text}\n"
+                    if notification.phone:
+                        text += f"Телефон: {notification.phone}\n"
+                    
+                    text += f"\nОт пользователя: {notification.creator_id}\n"
+                    
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_approve_notif_{notification.id}"),
+                            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_reject_notif_{notification.id}")
+                        ]
+                    ])
+                    
+                    if notification.photo_file_id:
+                        await bot.send_photo(
+                            chat_id=admin.telegram_id,
+                            photo=notification.photo_file_id,
+                            caption=text,
+                            reply_markup=keyboard
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=admin.telegram_id,
+                            text=text,
+                            reply_markup=keyboard
+                        )
+                    
+                    logger.info(f"[send_notification_to_admins_for_moderation] ✅ Отправлено администратору {admin.telegram_id}")
+                except Exception as e:
+                    logger.error(f"[send_notification_to_admins_for_moderation] ❌ Ошибка отправки администратору {admin.telegram_id}: {str(e)}")
+        
+        logger.info(f"[send_notification_to_admins_for_moderation] ✅ Успешно")
+    except Exception as e:
+        logger.error(f"[send_notification_to_admins_for_moderation] ❌ Ошибка: {str(e)}", exc_info=True)
+
+
+async def send_shurta_to_admins_for_moderation(alert, bot):
+    """
+    Отправить алерт Shurta всем администраторам для модерации
+    Send Shurta alert to all admins for moderation
+    """
+    logger.info(f"[send_shurta_to_admins_for_moderation] Начало | alert_id={alert.id}")
+    try:
+        # Получить всех администраторов
+        async with AsyncSessionLocal() as session:
+            admins = await UserService.get_all_admins(session)
+            
+            for admin in admins:
+                try:
+                    text = f"🚨 НОВЫЙ АЛЕРТ SHURTA НА МОДЕРАЦИЮ\n"
+                    text += f"═══════════════════════════════════════\n\n"
+                    text += f"Описание: {alert.description}\n"
+                    
+                    if alert.address_text:
+                        text += f"Место: {alert.address_text}\n"
+                    elif alert.latitude and alert.longitude:
+                        text += f"Координаты: {alert.latitude}, {alert.longitude}\n"
+                    
+                    text += f"\nОт пользователя: {alert.creator_id}\n"
+                    
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_approve_shurta_{alert.id}"),
+                            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_reject_shurta_{alert.id}")
+                        ]
+                    ])
+                    
+                    # Если есть геолокация - отправить как карту
+                    if alert.latitude and alert.longitude:
+                        await bot.send_location(
+                            chat_id=admin.telegram_id,
+                            latitude=alert.latitude,
+                            longitude=alert.longitude
+                        )
+                    
+                    if alert.photo_file_id:
+                        await bot.send_photo(
+                            chat_id=admin.telegram_id,
+                            photo=alert.photo_file_id,
+                            caption=text,
+                            reply_markup=keyboard
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=admin.telegram_id,
+                            text=text,
+                            reply_markup=keyboard
+                        )
+                    
+                    logger.info(f"[send_shurta_to_admins_for_moderation] ✅ Отправлено администратору {admin.telegram_id}")
+                except Exception as e:
+                    logger.error(f"[send_shurta_to_admins_for_moderation] ❌ Ошибка отправки администратору {admin.telegram_id}: {str(e)}")
+        
+        logger.info(f"[send_shurta_to_admins_for_moderation] ✅ Успешно")
+    except Exception as e:
+        logger.error(f"[send_shurta_to_admins_for_moderation] ❌ Ошибка: {str(e)}", exc_info=True)
 
 
 def get_language_keyboard():
@@ -984,6 +1104,36 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
         try:
             logger.info(f"Пользователь {user.id} создает уведомление о потере человека")
             
+    logger.info(f"[process_lost_person_phone] Начало | user_id={message.from_user.id}")
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, message.from_user.id)
+            if not user:
+                logger.warning(f"[process_lost_person_phone] Пользователь не найден")
+                return
+            
+            data = await state.get_data()
+            
+            location_type = data.get("location_type", "ADDRESS")
+            address_text = None
+            latitude = None
+            longitude = None
+            maps_url = None
+            
+            if location_type == "geo" and data.get("location"):
+                parts = data["location"].split(",")
+                if len(parts) == 2:
+                    try:
+                        latitude = float(parts[0])
+                        longitude = float(parts[1])
+                    except ValueError:
+                        address_text = data["location"]
+            elif location_type == "maps":
+                maps_url = data.get("location")
+            else:
+                address_text = data.get("location")
+            
+            # Создать уведомление с is_approved=False (требует модерации)
             notification = await NotificationService.create_notification(
                 session,
                 notification_type="PROPAJA_ODAM",
@@ -1030,6 +1180,31 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
                 reply_markup=get_main_menu_keyboard(user.language)
             )
             await state.clear()
+            # Отправить уведомление администраторам для модерации
+            await send_notification_to_admins_for_moderation(notification, message.bot)
+            
+            # Отправить подтверждение пользователю
+            confirm_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию\n⏳ Сообщение удалится через 10 секунд",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            # Авто-удаление через 10 секунд
+            await asyncio.sleep(10)
+            try:
+                await message.bot.delete_message(
+                    chat_id=message.chat.id,
+                    message_id=confirm_msg.message_id
+                )
+                logger.info(f"[process_lost_person_phone] ✅ Сообщение удалено через 10 секунд")
+            except Exception as e:
+                logger.warning(f"[process_lost_person_phone] Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+            logger.info(f"[process_lost_person_phone] ✅ Успешно создано уведомление")
+    except Exception as e:
+        logger.error(f"[process_lost_person_phone] ❌ Ошибка: {str(e)}", exc_info=True)
+        await message.answer("❌ Ошибка при создании объявления. Попробуйте позже.")
 
 
 @router.callback_query(F.data == "notif_item")
@@ -1240,6 +1415,36 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
         try:
             logger.info(f"Пользователь {user.id} создает уведомление о потере вещи")
             
+    logger.info(f"[process_lost_item_phone] Начало | user_id={message.from_user.id}")
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, message.from_user.id)
+            if not user:
+                logger.warning(f"[process_lost_item_phone] Пользователь не найден")
+                return
+            
+            data = await state.get_data()
+            
+            location_type = data.get("location_type", "ADDRESS")
+            address_text = None
+            latitude = None
+            longitude = None
+            maps_url = None
+            
+            if location_type == "geo" and data.get("location"):
+                parts = data["location"].split(",")
+                if len(parts) == 2:
+                    try:
+                        latitude = float(parts[0])
+                        longitude = float(parts[1])
+                    except ValueError:
+                        address_text = data["location"]
+            elif location_type == "maps":
+                maps_url = data.get("location")
+            else:
+                address_text = data.get("location")
+            
+            # Создать уведомление с is_approved=False (требует модерации)
             notification = await NotificationService.create_notification(
                 session,
                 notification_type="PROPAJA_NARSA",
@@ -1286,6 +1491,30 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
                 reply_markup=get_main_menu_keyboard(user.language)
             )
             await state.clear()
+            # Отправить уведомление администраторам для модерации
+            await send_notification_to_admins_for_moderation(notification, message.bot)
+            
+            # Подтверждение пользователю с автоудалением
+            confirm_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию\n⏳ Сообщение удалится через 10 секунд",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            await asyncio.sleep(10)
+            try:
+                await message.bot.delete_message(
+                    chat_id=message.chat.id,
+                    message_id=confirm_msg.message_id
+                )
+                logger.info(f"[process_lost_item_phone] ✅ Сообщение удалено через 10 секунд")
+            except Exception as e:
+                logger.warning(f"[process_lost_item_phone] Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+            logger.info(f"[process_lost_item_phone] ✅ Успешно создано уведомление")
+    except Exception as e:
+        logger.error(f"[process_lost_item_phone] ❌ Ошибка: {str(e)}", exc_info=True)
+        await message.answer("❌ Ошибка при создании объявления. Попробуйте позже.")
 
 
 @router.message(F.text.in_([t("menu_shurta", "RU"), t("menu_shurta", "UZ")]))
@@ -1456,6 +1685,40 @@ async def process_shurta_photo(message: Message, state: FSMContext):
         try:
             logger.info(f"Пользователь {user.id} создает Shurta-уведомление")
             
+    logger.info(f"[process_shurta_photo] Начало | user_id={message.from_user.id}")
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, message.from_user.id)
+            if not user:
+                logger.warning(f"[process_shurta_photo] Пользователь не найден")
+                return
+            
+            photo_file_id = None
+            if message.photo:
+                photo_file_id = message.photo[-1].file_id
+            
+            data = await state.get_data()
+            
+            location_type = data.get("location_type", "ADDRESS")
+            address_text = None
+            latitude = None
+            longitude = None
+            maps_url = None
+            
+            if location_type == "geo" and data.get("location_info"):
+                parts = data["location_info"].split(",")
+                if len(parts) == 2:
+                    try:
+                        latitude = float(parts[0])
+                        longitude = float(parts[1])
+                    except ValueError:
+                        address_text = data["location_info"]
+            elif location_type == "maps":
+                maps_url = data.get("location_info")
+            else:
+                address_text = data.get("location_info")
+            
+            # Создать алерт с is_approved=False (требует модерации)
             alert = await ShurtaService.create_alert(
                 session,
                 creator_id=user.id,
@@ -1496,6 +1759,30 @@ async def process_shurta_photo(message: Message, state: FSMContext):
                 reply_markup=get_main_menu_keyboard(user.language)
             )
             await state.clear()
+            # Отправить алерт администраторам для модерации
+            await send_shurta_to_admins_for_moderation(alert, message.bot)
+            
+            # Подтверждение пользователю с автоудалением
+            confirm_msg = await message.answer(
+                "✅ Алерт отправлен на модерацию\n⏳ Сообщение удалится через 10 секунд",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            await asyncio.sleep(10)
+            try:
+                await message.bot.delete_message(
+                    chat_id=message.chat.id,
+                    message_id=confirm_msg.message_id
+                )
+                logger.info(f"[process_shurta_photo] ✅ Сообщение удалено через 10 секунд")
+            except Exception as e:
+                logger.warning(f"[process_shurta_photo] Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+            logger.info(f"[process_shurta_photo] ✅ Успешно создан алерт Shurta")
+    except Exception as e:
+        logger.error(f"[process_shurta_photo] ❌ Ошибка: {str(e)}", exc_info=True)
+        await message.answer("❌ Ошибка при создании алерта. Попробуйте позже.")
 
 
 def register_user_handlers(dp: Dispatcher):
