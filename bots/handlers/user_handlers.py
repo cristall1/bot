@@ -14,7 +14,9 @@ from services.delivery_service import DeliveryService
 from services.notification_service import NotificationService
 from services.shurta_service import ShurtaService
 from services.user_message_service import UserMessageService
+from services.statistics_service import StatisticsService
 from utils.logger import logger
+import asyncio
 from config import settings
 
 router = Router()
@@ -1073,6 +1075,35 @@ async def process_lost_person_location(message: Message, state: FSMContext):
 @router.message(UserStates.notification_person_phone)
 async def process_lost_person_phone(message: Message, state: FSMContext):
     """Process lost person phone and create notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        data = await state.get_data()
+        
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location"):
+            parts = data["location"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location"]
+        elif location_type == "maps":
+            maps_url = data.get("location")
+        else:
+            address_text = data.get("location")
+        
+        try:
+            logger.info(f"Пользователь {user.id} создает уведомление о потере человека")
+            
     logger.info(f"[process_lost_person_phone] Начало | user_id={message.from_user.id}")
     try:
         async with AsyncSessionLocal() as session:
@@ -1118,6 +1149,37 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
                 photo_file_id=data.get("photo_file_id")
             )
             
+            # Отправить сообщение пользователю о том, что заявка на модерации
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            # Записать активность для статистики
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "NOTIFICATION_CREATED",
+                {"type": "PROPAJA_ODAM", "notification_id": notification.id}
+            )
+            
+            logger.info(f"Уведомление {notification.id} создано и отправлено на модерацию")
+            
+            # Удалить сообщение через 10 секунд
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании уведомления: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
             # Отправить уведомление администраторам для модерации
             await send_notification_to_admins_for_moderation(notification, message.bot)
             
@@ -1324,6 +1386,35 @@ async def process_lost_item_location(message: Message, state: FSMContext):
 @router.message(UserStates.notification_item_phone)
 async def process_lost_item_phone(message: Message, state: FSMContext):
     """Process lost item phone and create notification"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        data = await state.get_data()
+        
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location"):
+            parts = data["location"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location"]
+        elif location_type == "maps":
+            maps_url = data.get("location")
+        else:
+            address_text = data.get("location")
+        
+        try:
+            logger.info(f"Пользователь {user.id} создает уведомление о потере вещи")
+            
     logger.info(f"[process_lost_item_phone] Начало | user_id={message.from_user.id}")
     try:
         async with AsyncSessionLocal() as session:
@@ -1369,6 +1460,37 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
                 photo_file_id=data.get("photo_file_id")
             )
             
+            # Отправить сообщение пользователю о том, что заявка на модерации
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            # Записать активность для статистики
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "NOTIFICATION_CREATED",
+                {"type": "PROPAJA_NARSA", "notification_id": notification.id}
+            )
+            
+            logger.info(f"Уведомление {notification.id} создано и отправлено на модерацию")
+            
+            # Удалить сообщение через 10 секунд
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании уведомления: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
             # Отправить уведомление администраторам для модерации
             await send_notification_to_admins_for_moderation(notification, message.bot)
             
@@ -1530,6 +1652,39 @@ async def process_shurta_location_maps(message: Message, state: FSMContext):
 @router.message(UserStates.shurta_photo)
 async def process_shurta_photo(message: Message, state: FSMContext):
     """Process shurta photo and create alert"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        photo_file_id = None
+        if message.photo:
+            photo_file_id = message.photo[-1].file_id
+        
+        data = await state.get_data()
+        
+        location_type = data.get("location_type", "ADDRESS")
+        address_text = None
+        latitude = None
+        longitude = None
+        maps_url = None
+        
+        if location_type == "geo" and data.get("location_info"):
+            parts = data["location_info"].split(",")
+            if len(parts) == 2:
+                try:
+                    latitude = float(parts[0])
+                    longitude = float(parts[1])
+                except ValueError:
+                    address_text = data["location_info"]
+        elif location_type == "maps":
+            maps_url = data.get("location_info")
+        else:
+            address_text = data.get("location_info")
+        
+        try:
+            logger.info(f"Пользователь {user.id} создает Shurta-уведомление")
+            
     logger.info(f"[process_shurta_photo] Начало | user_id={message.from_user.id}")
     try:
         async with AsyncSessionLocal() as session:
@@ -1576,6 +1731,34 @@ async def process_shurta_photo(message: Message, state: FSMContext):
                 photo_file_id=photo_file_id
             )
             
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "SHURTA_CREATED",
+                {"alert_id": alert.id}
+            )
+            
+            logger.info(f"Shurta {alert.id} создан и отправлен на модерацию")
+            
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании Shurta: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
             # Отправить алерт администраторам для модерации
             await send_shurta_to_admins_for_moderation(alert, message.bot)
             
