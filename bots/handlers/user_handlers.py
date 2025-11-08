@@ -829,13 +829,13 @@ async def process_lost_person_photo(message: Message, state: FSMContext):
         if not user:
             return
         
-        photo_url = None
+        photo_file_id = None
         if message.photo:
-            photo_url = message.photo[-1].file_id
+            photo_file_id = message.photo[-1].file_id
         elif message.text != t("notifications_skip_photo", user.language):
-            photo_url = None
+            photo_file_id = None
         
-        await state.update_data(photo_url=photo_url)
+        await state.update_data(photo_file_id=photo_file_id)
         
         # Show location choice options
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -991,9 +991,9 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
             longitude=longitude,
             maps_url=maps_url,
             phone=message.text,
-            photo_file_id=data.get("photo_url")
+            photo_file_id=data.get("photo_file_id")
         )
-        
+
         # Notify all users
         all_users = await UserService.get_all_users(session)
         for target_user in all_users:
@@ -1004,11 +1004,11 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
                                  description=data["description"],
                                  location=data["location"],
                                  phone=message.text)
-                    
-                    if data.get("photo_url"):
+
+                    if data.get("photo_file_id"):
                         await message.bot.send_photo(
                             target_user.telegram_id,
-                            photo=data["photo_url"],
+                            photo=data["photo_file_id"],
                             caption=alert_text
                         )
                     else:
@@ -1081,13 +1081,13 @@ async def process_lost_item_photo(message: Message, state: FSMContext):
         if not user:
             return
         
-        photo_url = None
+        photo_file_id = None
         if message.photo:
-            photo_url = message.photo[-1].file_id
+            photo_file_id = message.photo[-1].file_id
         elif message.text != t("notifications_skip_photo", user.language):
-            photo_url = None
+            photo_file_id = None
         
-        await state.update_data(photo_url=photo_url)
+        await state.update_data(photo_file_id=photo_file_id)
         
         # Show location choice options
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1243,9 +1243,9 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
             longitude=longitude,
             maps_url=maps_url,
             phone=message.text,
-            photo_file_id=data.get("photo_url")
+            photo_file_id=data.get("photo_file_id")
         )
-        
+
         # Notify all users
         all_users = await UserService.get_all_users(session)
         for target_user in all_users:
@@ -1256,11 +1256,11 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
                                  description=data["description"],
                                  location=data["location"],
                                  phone=message.text)
-                    
-                    if data.get("photo_url"):
+
+                    if data.get("photo_file_id"):
                         await message.bot.send_photo(
                             target_user.telegram_id,
-                            photo=data["photo_url"],
+                            photo=data["photo_file_id"],
                             caption=alert_text
                         )
                     else:
