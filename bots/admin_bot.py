@@ -14,7 +14,10 @@ class AdminBot:
     async def start(self):
         """Start the admin bot"""
         from bots.handlers.admin_handlers import register_admin_handlers
+        from bots.handlers.admin_category_handlers import register_category_handlers
+        
         register_admin_handlers(self.dp)
+        register_category_handlers(self.dp)
         
         await self.dp.start_polling(self.bot)
     

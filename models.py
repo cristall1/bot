@@ -278,3 +278,69 @@ class ButtonClick(Base):
 
     # Relationships
     user = relationship("User", back_populates="button_clicks")
+
+
+class Category(Base):
+    """Категории для админ-панели (Categories for admin panel)"""
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False)  # talim, dostavka, yoqolgan, shurta, etc.
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    icon = Column(String(50), nullable=True)  # Emoji icon
+    is_active = Column(Boolean, default=True)  # on/off toggle
+    order_index = Column(Integer, default=0)
+    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # For nested categories
+    content_type = Column(String(20), default="TEXT")  # TEXT, PHOTO, AUDIO, PDF, LINK
+    text_content_ru = Column(Text, nullable=True)
+    text_content_uz = Column(Text, nullable=True)
+    photo_file_id = Column(String(500), nullable=True)
+    audio_file_id = Column(String(500), nullable=True)
+    pdf_file_id = Column(String(500), nullable=True)
+    link_url = Column(String(500), nullable=True)
+    button_type = Column(String(20), nullable=True)  # INLINE, KEYBOARD, NONE
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    parent = relationship("Category", remote_side=[id], backref="children")
+    buttons = relationship("CategoryButton", back_populates="category", cascade="all, delete-orphan")
+
+
+class CategoryButton(Base):
+    """Кнопки для категорий (Buttons for categories)"""
+    __tablename__ = "category_buttons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    text_ru = Column(String(255), nullable=False)
+    text_uz = Column(String(255), nullable=False)
+    button_type = Column(String(20), default="LINK")  # LINK, CALLBACK, GEO
+    button_value = Column(String(500), nullable=False)  # URL, callback_data, coordinates
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    category = relationship("Category", back_populates="buttons")
+
+
+class ModerationQueue(Base):
+    """Очередь модерации (Moderation queue)"""
+    __tablename__ = "moderation_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False)  # NOTIFICATION, SHURTA_ALERT, DELIVERY, USER_MESSAGE
+    entity_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="PENDING")  # PENDING, APPROVED, REJECTED
+    moderator_id = Column(Integer, nullable=True)
+    moderator_comment = Column(Text, nullable=True)
+    admin_message_id = Column(Integer, nullable=True)  # Message ID in admin chat
+    created_at = Column(DateTime, default=datetime.utcnow)
+    moderated_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    moderator = relationship("User", foreign_keys=[moderator_id])
