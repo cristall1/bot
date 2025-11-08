@@ -390,7 +390,7 @@ async def process_delivery_description(message: Message, state: FSMContext):
         ])
         
         await message.answer(t("delivery_location_choice", user.language), reply_markup=keyboard)
-        await state.set_state(UserStates.delivery_location_choice)
+        await state.set_state(UserStates.delivery_location_type)
 
 
 @router.callback_query(F.data == "delivery_loc_text")
@@ -1241,7 +1241,7 @@ async def process_shurta_description(message: Message, state: FSMContext):
             t("shurta_location_choice", user.language),
             reply_markup=keyboard
         )
-        await state.set_state(UserStates.shurta_location_choice)
+        await state.set_state(UserStates.shurta_location_type)
 
 
 @router.callback_query(F.data == "shurta_text")
@@ -1253,11 +1253,11 @@ async def shurta_text_location(callback: CallbackQuery, state: FSMContext):
             return
         
         await callback.message.answer(t("shurta_location_input", user.language))
-        await state.set_state(UserStates.shurta_location_input)
+        await state.set_state(UserStates.shurta_location_text)
     await callback.answer()
 
 
-@router.message(UserStates.shurta_location_input)
+@router.message(UserStates.shurta_location_text)
 async def process_shurta_location_text(message: Message, state: FSMContext):
     """Process shurta text location"""
     async with AsyncSessionLocal() as session:
@@ -1266,6 +1266,69 @@ async def process_shurta_location_text(message: Message, state: FSMContext):
             return
         
         await state.update_data(location_info=message.text)
+        
+        skip_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
+            resize_keyboard=True
+        )
+        await message.answer(t("shurta_photo", user.language), reply_markup=skip_keyboard)
+        await state.set_state(UserStates.shurta_photo)
+
+
+@router.callback_query(F.data == "shurta_geo")
+async def shurta_geo_location(callback: CallbackQuery, state: FSMContext):
+    """Geolocation for shurta"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(t("shurta_location_geo_input", user.language))
+        await state.set_state(UserStates.shurta_location_geo)
+    await callback.answer()
+
+
+@router.message(UserStates.shurta_location_geo, F.location)
+async def process_shurta_location_geo(message: Message, state: FSMContext):
+    """Process shurta geolocation"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        location_str = f"{message.location.latitude},{message.location.longitude}"
+        await state.update_data(location_info=location_str, location_type="geo")
+        
+        skip_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
+            resize_keyboard=True
+        )
+        await message.answer(t("shurta_photo", user.language), reply_markup=skip_keyboard)
+        await state.set_state(UserStates.shurta_photo)
+
+
+@router.callback_query(F.data == "shurta_maps")
+async def shurta_maps_location(callback: CallbackQuery, state: FSMContext):
+    """Google Maps link for shurta"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.message.answer(t("shurta_location_maps_input", user.language))
+        await state.set_state(UserStates.shurta_location_maps)
+    await callback.answer()
+
+
+@router.message(UserStates.shurta_location_maps, ~F.location)
+async def process_shurta_location_maps(message: Message, state: FSMContext):
+    """Process shurta Google Maps link"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        if not user:
+            return
+        
+        await state.update_data(location_info=message.text, location_type="maps")
         
         skip_keyboard = ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text=t("notifications_skip_photo", user.language))]],
