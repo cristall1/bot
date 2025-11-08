@@ -69,24 +69,33 @@ def get_back_keyboard(lang: str):
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     """Handle /start command"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, message.from_user.id)
-        
-        if not user:
-            await message.answer(
-                t("welcome", "RU"),
-                reply_markup=get_language_keyboard()
-            )
-            await state.set_state(UserStates.selecting_language)
-        else:
-            if user.is_banned:
-                await message.answer(t("banned", user.language))
-                return
+    logger.info(f"[cmd_start] Started | user_id={message.from_user.id}, username={message.from_user.username}")
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, message.from_user.id)
             
-            await message.answer(
-                t("main_menu", user.language),
-                reply_markup=get_main_menu_keyboard(user.language)
-            )
+            if not user:
+                await message.answer(
+                    t("welcome", "RU"),
+                    reply_markup=get_language_keyboard()
+                )
+                await state.set_state(UserStates.selecting_language)
+                logger.info(f"[cmd_start] ✅ New user | user_id={message.from_user.id}")
+            else:
+                if user.is_banned:
+                    await message.answer(t("banned", user.language))
+                    logger.warning(f"[cmd_start] ⚠️ Banned user access | user_id={message.from_user.id}")
+                    return
+                
+                await message.answer(
+                    t("main_menu", user.language),
+                    reply_markup=get_main_menu_keyboard(user.language)
+                )
+                logger.info(f"[cmd_start] ✅ Existing user | user_id={message.from_user.id}, lang={user.language}")
+    
+    except Exception as e:
+        logger.error(f"[cmd_start] ❌ Error | user_id={message.from_user.id}, error={str(e)}")
+        await message.answer("❌ Ошибка при запуске бота")
 
 
 @router.callback_query(F.data.startswith("lang_"))
@@ -165,48 +174,78 @@ async def process_citizenship_selection(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("doc_"))
 async def show_document(callback: CallbackQuery):
     """Show document content"""
-    doc_id = int(callback.data.split("_")[1])
+    logger.info(f"[show_document] Started | user_id={callback.from_user.id}, doc_id={callback.data}")
+    try:
+        doc_id = int(callback.data.split("_")[1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user:
+                logger.warning(f"[show_document] User not found | user_id={callback.from_user.id}")
+                return
+            
+            document = await DocumentService.get_document(session, doc_id)
+            if not document:
+                logger.warning(f"[show_document] Document not found | doc_id={doc_id}")
+                return
+            
+            content = document.content_ru if user.language == "RU" else document.content_uz
+            title = document.name_ru if user.language == "RU" else document.name_uz
+            
+            # Get buttons for this document
+            doc_buttons = await DocumentService.get_document_buttons(session, doc_id)
+            
+            keyboard_buttons = []
+            for btn in doc_buttons:
+                btn_text = btn.text_ru if user.language == "RU" else btn.text_uz
+                if btn.button_type == "LINK":
+                    keyboard_buttons.append([InlineKeyboardButton(text=btn_text, url=btn.button_value)])
+                elif btn.button_type in ["PHOTO", "PDF", "AUDIO"]:
+                    keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_file_{btn.id}")])
+                elif btn.button_type == "GEO":
+                    keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_geo_{btn.id}")])
+            
+            keyboard_buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data=f"cit_{document.citizenship_scope}")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+            
+            # Send content based on type
+            if document.content_type == "PHOTO" and document.photo_file_id:
+                await callback.message.answer_photo(
+                    photo=document.photo_file_id,
+                    caption=f"{title}\n\n{content}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_document] ✅ Photo sent | doc_id={doc_id}")
+            elif document.content_type == "TEXT":
+                await callback.message.answer(
+                    f"{title}\n\n{content}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_document] ✅ Text sent | doc_id={doc_id}")
+            elif document.content_type == "PDF" and document.pdf_file_id:
+                await callback.message.answer_document(
+                    document=document.pdf_file_id,
+                    caption=f"{title}\n\n{content}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_document] ✅ PDF sent | doc_id={doc_id}")
+            elif document.content_type == "AUDIO" and document.audio_file_id:
+                await callback.message.answer_audio(
+                    audio=document.audio_file_id,
+                    caption=f"{title}\n\n{content}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_document] ✅ Audio sent | doc_id={doc_id}")
+            else:
+                await callback.message.answer(
+                    f"{title}\n\n{content}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_document] ✅ Default text sent | doc_id={doc_id}")
     
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, callback.from_user.id)
-        if not user:
-            return
-        
-        document = await DocumentService.get_document(session, doc_id)
-        if not document:
-            return
-        
-        content = document.content_ru if user.language == "RU" else document.content_uz
-        title = document.name_ru if user.language == "RU" else document.name_uz
-        
-        # Get buttons for this document
-        doc_buttons = await DocumentService.get_document_buttons(session, doc_id)
-        
-        keyboard_buttons = []
-        for btn in doc_buttons:
-            btn_text = btn.text_ru if user.language == "RU" else btn.text_uz
-            if btn.button_type == "LINK":
-                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, url=btn.button_value)])
-            elif btn.button_type in ["PHOTO", "PDF", "AUDIO"]:
-                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_file_{btn.id}")])
-            elif btn.button_type == "GEO":
-                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"doc_geo_{btn.id}")])
-        
-        keyboard_buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data=f"cit_{document.citizenship_scope}")])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-        
-        # Send photo if available
-        if document.photo_file_id:
-            await callback.message.answer_photo(
-                photo=document.photo_file_id,
-                caption=f"{title}\n\n{content}",
-                reply_markup=keyboard
-            )
-        else:
-            await callback.message.answer(
-                f"{title}\n\n{content}",
-                reply_markup=keyboard
-            )
+    except Exception as e:
+        logger.error(f"[show_document] ❌ Error | user_id={callback.from_user.id}, error={str(e)}")
+        await callback.answer("❌ Ошибка при загрузке документа", show_alert=True)
     
     await callback.answer()
 
@@ -504,10 +543,13 @@ async def process_delivery_location(message: Message, state: FSMContext):
 @router.message(UserStates.delivery_phone)
 async def process_delivery_phone(message: Message, state: FSMContext):
     """Process delivery phone and create order"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, message.from_user.id)
-        if not user:
-            return
+    logger.info(f"[process_delivery_phone] Started | user_id={message.from_user.id}")
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, message.from_user.id)
+            if not user:
+                logger.warning(f"[process_delivery_phone] User not found | user_id={message.from_user.id}")
+                return
         
         data = await state.get_data()
 
@@ -541,9 +583,11 @@ async def process_delivery_phone(message: Message, state: FSMContext):
             maps_url=maps_url,
             phone=message.text
         )
+        logger.info(f"[process_delivery_phone] ✅ Delivery created | delivery_id={delivery.id}")
         
         # Notify all active couriers
         couriers = await DeliveryService.get_all_couriers(session)
+        notified_count = 0
         for courier in couriers:
             courier_user = await UserService.get_user_by_id(session, courier.user_id)
             if courier_user and courier_user.notifications_enabled:
@@ -567,33 +611,45 @@ async def process_delivery_phone(message: Message, state: FSMContext):
                         alert_text,
                         reply_markup=keyboard
                     )
+                    notified_count += 1
                 except Exception as e:
                     logger.error(f"Failed to notify courier {courier_user.telegram_id}: {e}")
+        
+        logger.info(f"[process_delivery_phone] ✅ Notified {notified_count} couriers | delivery_id={delivery.id}")
         
         await message.answer(
             t("delivery_created", user.language),
             reply_markup=get_main_menu_keyboard(user.language)
         )
         await state.clear()
+    
+    except Exception as e:
+        logger.error(f"[process_delivery_phone] ❌ Error | user_id={message.from_user.id}, error={str(e)}")
+        await message.answer("❌ Ошибка при создании заказа")
+        await state.clear()
 
 
 @router.callback_query(F.data.startswith("take_delivery_"))
 async def take_delivery(callback: CallbackQuery):
     """Courier takes delivery"""
-    delivery_id = int(callback.data.split("_")[2])
-    
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, callback.from_user.id)
-        if not user:
-            return
+    logger.info(f"[take_delivery] Started | user_id={callback.from_user.id}, callback_data={callback.data}")
+    try:
+        delivery_id = int(callback.data.split("_")[2])
         
-        # Assign delivery
-        delivery = await DeliveryService.assign_courier(session, delivery_id, user.id)
-        
-        if not delivery:
-            await callback.answer(t("delivery_already_taken", user.language), show_alert=True)
-            return
-        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user:
+                logger.warning(f"[take_delivery] User not found | user_id={callback.from_user.id}")
+                return
+            
+            # Assign delivery
+            delivery = await DeliveryService.assign_courier(session, delivery_id, user.id)
+            
+            if not delivery:
+                await callback.answer(t("delivery_already_taken", user.language), show_alert=True)
+                logger.warning(f"[take_delivery] Delivery already taken | delivery_id={delivery_id}")
+                return
+
         # Notify creator with courier contact info
         creator = await UserService.get_user_by_id(session, delivery.creator_id)
         if creator:
@@ -601,14 +657,19 @@ async def take_delivery(callback: CallbackQuery):
                 msg_text = t("delivery_accepted", creator.language)
                 msg_text += f"\n\n👤 Курьер: @{user.username or user.first_name}"
                 msg_text += f"\n📞 Телефон: {user.phone if user.phone else 'Не указан'}"
-                
+
                 await callback.bot.send_message(creator.telegram_id, msg_text)
+                logger.info(f"[take_delivery] ✅ Notified creator | creator_id={creator.id}")
             except Exception as e:
-                logger.error(f"Failed to notify creator: {e}")
-        
-        await callback.message.edit_text(t("delivery_taken", user.language))
-    
-    await callback.answer()
+                logger.error(f"[take_delivery] Failed to notify creator: {e}")
+
+            await callback.message.edit_text(t("delivery_taken", user.language))
+            logger.info(f"[take_delivery] ✅ Delivery taken | delivery_id={delivery_id}, courier_id={user.id}")
+            await callback.answer()
+
+            except Exception as e:
+            logger.error(f"[take_delivery] ❌ Error | user_id={callback.from_user.id}, error={str(e)}")
+            await callback.answer("❌ Ошибка при принятии заказа", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("reject_delivery_"))
@@ -983,41 +1044,25 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
             session,
             notification_type="PROPAJA_ODAM",
             creator_id=user.id,
-            title=data["name"],
-            description=data["description"],
+            title_ru=data["name"],
+            title_uz=data["name"],  # Can be the same for names
+            description_ru=data["description"],
+            description_uz=data["description"],  # Can be the same initially
             location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
             address_text=address_text,
             latitude=latitude,
             longitude=longitude,
             maps_url=maps_url,
-            phone=message.text,
+            phone=data["phone"],
             photo_file_id=data.get("photo_url")
         )
         
-        # Notify all users
-        all_users = await UserService.get_all_users(session)
-        for target_user in all_users:
-            if target_user.notifications_enabled and target_user.id != user.id:
-                try:
-                    alert_text = t("notifications_alert_person", target_user.language,
-                                 name=data["name"],
-                                 description=data["description"],
-                                 location=data["location"],
-                                 phone=message.text)
-                    
-                    if data.get("photo_url"):
-                        await message.bot.send_photo(
-                            target_user.telegram_id,
-                            photo=data["photo_url"],
-                            caption=alert_text
-                        )
-                    else:
-                        await message.bot.send_message(
-                            target_user.telegram_id,
-                            alert_text
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
+        # Send to admin for moderation (NOT to users directly)
+        await message.answer("✅ Объявление отправлено на модерацию администратору")
+        logger.info(f"[process_lost_person_phone] ✅ Sent to moderation | notification_id={notification.id}")
+        
+        # TODO: Send notification to admins for moderation
+        # This would be implemented with admin notification system
         
         await message.answer(
             t("notifications_created", user.language),
@@ -1235,41 +1280,25 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
             session,
             notification_type="PROPAJA_NARSA",
             creator_id=user.id,
-            title=data["what"],
-            description=data["description"],
+            title_ru=data["what"],
+            title_uz=data["what"],  # Can be the same for item names
+            description_ru=data["description"],
+            description_uz=data["description"],  # Can be the same initially
             location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
             address_text=address_text,
             latitude=latitude,
             longitude=longitude,
             maps_url=maps_url,
-            phone=message.text,
+            phone=data["phone"],
             photo_file_id=data.get("photo_url")
         )
         
-        # Notify all users
-        all_users = await UserService.get_all_users(session)
-        for target_user in all_users:
-            if target_user.notifications_enabled and target_user.id != user.id:
-                try:
-                    alert_text = t("notifications_alert_item", target_user.language,
-                                 what=data["what"],
-                                 description=data["description"],
-                                 location=data["location"],
-                                 phone=message.text)
-                    
-                    if data.get("photo_url"):
-                        await message.bot.send_photo(
-                            target_user.telegram_id,
-                            photo=data["photo_url"],
-                            caption=alert_text
-                        )
-                    else:
-                        await message.bot.send_message(
-                            target_user.telegram_id,
-                            alert_text
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
+        # Send to admin for moderation (NOT to users directly)
+        await message.answer("✅ Объявление отправлено на модерацию администратору")
+        logger.info(f"[process_lost_item_phone] ✅ Sent to moderation | notification_id={notification.id}")
+        
+        # TODO: Send notification to admins for moderation
+        # This would be implemented with admin notification system
         
         await message.answer(
             t("notifications_created", user.language),
@@ -1483,6 +1512,100 @@ async def process_shurta_photo(message: Message, state: FSMContext):
             reply_markup=get_main_menu_keyboard(user.language)
         )
         await state.clear()
+
+
+@router.callback_query(F.data.startswith("doc_file_"))
+async def handle_document_file(callback: CallbackQuery):
+    """Handle document file button clicks"""
+    logger.info(f"[handle_document_file] Started | callback_data={callback.data}")
+    try:
+        button_id = int(callback.data.split("_")[2])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user:
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+            
+            # Get button info
+            from services.document_service import DocumentService
+            button = await DocumentService.get_document_button(session, button_id)
+            if not button:
+                await callback.answer("❌ Кнопка не найдена", show_alert=True)
+                return
+            
+            # Handle different file types
+            if button.button_type == "PHOTO" and button.button_value:
+                await callback.message.answer_photo(
+                    photo=button.button_value,
+                    caption=button.text_ru if user.language == "RU" else button.text_uz
+                )
+                logger.info(f"[handle_document_file] ✅ Photo sent | button_id={button_id}")
+            elif button.button_type == "PDF" and button.button_value:
+                await callback.message.answer_document(
+                    document=button.button_value,
+                    caption=button.text_ru if user.language == "RU" else button.text_uz
+                )
+                logger.info(f"[handle_document_file] ✅ PDF sent | button_id={button_id}")
+            elif button.button_type == "AUDIO" and button.button_value:
+                await callback.message.answer_audio(
+                    audio=button.button_value,
+                    caption=button.text_ru if user.language == "RU" else button.text_uz
+                )
+                logger.info(f"[handle_document_file] ✅ Audio sent | button_id={button_id}")
+            else:
+                await callback.answer("❌ Файл не найден", show_alert=True)
+                logger.warning(f"[handle_document_file] No file content | button_id={button_id}")
+    
+    except Exception as e:
+        logger.error(f"[handle_document_file] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при загрузке файла", show_alert=True)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("doc_geo_"))
+async def handle_document_geo(callback: CallbackQuery):
+    """Handle document geo button clicks"""
+    logger.info(f"[handle_document_geo] Started | callback_data={callback.data}")
+    try:
+        button_id = int(callback.data.split("_")[2])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user(session, callback.from_user.id)
+            if not user:
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+            
+            # Get button info
+            from services.document_service import DocumentService
+            button = await DocumentService.get_document_button(session, button_id)
+            if not button:
+                await callback.answer("❌ Кнопка не найдена", show_alert=True)
+                return
+            
+            # Parse coordinates from button_value (format: "lat,lng")
+            if "," in button.button_value:
+                try:
+                    lat, lng = map(float, button.button_value.split(","))
+                    await callback.message.answer_location(
+                        latitude=lat,
+                        longitude=lng,
+                        title=button.text_ru if user.language == "RU" else button.text_uz
+                    )
+                    logger.info(f"[handle_document_geo] ✅ Location sent | button_id={button_id}, coords={lat},{lng}")
+                except ValueError:
+                    await callback.answer("❌ Неверный формат координат", show_alert=True)
+                    logger.warning(f"[handle_document_geo] Invalid coords | button_id={button_id}, value={button.button_value}")
+            else:
+                await callback.answer("❌ Координаты не найдены", show_alert=True)
+                logger.warning(f"[handle_document_geo] No coords | button_id={button_id}")
+    
+    except Exception as e:
+        logger.error(f"[handle_document_geo] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при загрузке локации", show_alert=True)
+    
+    await callback.answer()
 
 
 def register_user_handlers(dp: Dispatcher):

@@ -184,6 +184,14 @@ class DocumentService:
         return result.scalars().all()
     
     @staticmethod
+    async def get_document_button(session: AsyncSession, button_id: int) -> Optional[DocumentButton]:
+        """Get document button by ID"""
+        result = await session.execute(
+            select(DocumentButton).where(DocumentButton.id == button_id)
+        )
+        return result.scalar_one_or_none()
+    
+    @staticmethod
     async def delete_button(session: AsyncSession, button_id: int) -> bool:
         """Delete button"""
         result = await session.execute(
