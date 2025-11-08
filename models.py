@@ -108,8 +108,10 @@ class Notification(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(String(20), nullable=False)  # PROPAJA_ODAM, PROPAJA_NARSA
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    title = Column(String(255), nullable=False)  # Name or What
-    description = Column(Text, nullable=False)
+    title_ru = Column(String(255), nullable=False)  # Name in Russian
+    title_uz = Column(String(255), nullable=False)  # Name in Uzbek
+    description_ru = Column(Text, nullable=False)  # Description in Russian
+    description_uz = Column(Text, nullable=False)  # Description in Uzbek
     photo_file_id = Column(String(500), nullable=True)
     location_type = Column(String(20), nullable=False)  # ADDRESS, GEO, MAPS
     address_text = Column(String(500), nullable=True)
@@ -184,12 +186,15 @@ class Broadcast(Base):
     admin_id = Column(Integer, nullable=False)
     name_ru = Column(String(255), nullable=False)  # Campaign name
     name_uz = Column(String(255), nullable=False)  # Campaign name
-    message_ru = Column(Text, nullable=False)
-    message_uz = Column(Text, nullable=True)
+    text_ru = Column(Text, nullable=False)  # Message text in Russian
+    text_uz = Column(Text, nullable=True)  # Message text in Uzbek
     photo_file_id = Column(String(500), nullable=True)
-    recipient_filter = Column(String(50), default="ALL")  # ALL, RU, UZ, COURIERS, CITIZENSHIP_UZ, etc
+    target_audience = Column(JSON, nullable=True)  # JSON with filters
+    scheduled_at = Column(DateTime, nullable=True)  # When to send
     sent_at = Column(DateTime, nullable=True)
     recipient_count = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
     is_sent = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

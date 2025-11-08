@@ -14,8 +14,10 @@ class NotificationService:
         session: AsyncSession,
         notification_type: str,
         creator_id: int,
-        title: str,
-        description: str,
+        title_ru: str,
+        title_uz: str,
+        description_ru: str,
+        description_uz: str,
         location_type: str,
         address_text: str = None,
         latitude: float = None,
@@ -26,28 +28,36 @@ class NotificationService:
         photo_file_id: str = None
     ) -> Notification:
         """Create new notification (requires admin approval)"""
-        notification = Notification(
-            type=notification_type,
-            creator_id=creator_id,
-            title=title,
-            description=description,
-            location_type=location_type,
-            address_text=address_text,
-            latitude=latitude,
-            longitude=longitude,
-            geo_name=geo_name,
-            maps_url=maps_url,
-            phone=phone,
-            photo_file_id=photo_file_id,
-            is_approved=False,  # Requires admin approval
-            is_moderated=False,
-            expires_at=datetime.utcnow() + timedelta(hours=48)  # Auto-expire after 48 hours
-        )
-        session.add(notification)
-        await session.commit()
-        await session.refresh(notification)
-        logger.info(f"Notification created: {notification_type} by user {creator_id} (pending approval)")
-        return notification
+        logger.info(f"[create_notification] Started | creator_id={creator_id}, type={notification_type}")
+        try:
+            notification = Notification(
+                type=notification_type,
+                creator_id=creator_id,
+                title_ru=title_ru,
+                title_uz=title_uz,
+                description_ru=description_ru,
+                description_uz=description_uz,
+                location_type=location_type,
+                address_text=address_text,
+                latitude=latitude,
+                longitude=longitude,
+                geo_name=geo_name,
+                maps_url=maps_url,
+                phone=phone,
+                photo_file_id=photo_file_id,
+                is_approved=False,  # Requires admin approval
+                is_moderated=False,
+                is_active=True,
+                expires_at=datetime.utcnow() + timedelta(hours=48)  # Auto-expire after 48 hours
+            )
+            session.add(notification)
+            await session.commit()
+            await session.refresh(notification)
+            logger.info(f"[create_notification] ✅ Success | notification_id={notification.id}")
+            return notification
+        except Exception as e:
+            logger.error(f"[create_notification] ❌ Error | {str(e)}")
+            raise
     
     @staticmethod
     async def get_notification(session: AsyncSession, notification_id: int) -> Optional[Notification]:

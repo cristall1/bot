@@ -722,7 +722,7 @@ async def show_pending_notifications(callback: CallbackQuery, state: FSMContext)
         
         keyboard_buttons = []
         for notif in notifs:
-            preview = (notif.title[:30] + "...") if len(notif.title) > 30 else notif.title
+            preview = (notif.title_ru[:30] + "...") if len(notif.title_ru) > 30 else notif.title_ru
             creator_name = notif.creator.username if notif.creator and notif.creator.username else f"ID{notif.creator_id}"
             keyboard_buttons.append([
                 InlineKeyboardButton(
@@ -767,8 +767,8 @@ async def view_notification_detail(callback: CallbackQuery):
         text = f"🔔 УВЕДОМЛЕНИЕ\n"
         text += f"═══════════════════════════════════════\n\n"
         text += f"Тип: {notification.type}\n"
-        text += f"Название: {notification.title}\n"
-        text += f"Описание: {notification.description}\n"
+        text += f"Название: {notification.title_ru}\n"
+        text += f"Описание: {notification.description_ru}\n"
         text += f"Телефон: {notification.phone}\n"
         text += f"Место: {notification.address_text or 'не указано'}"
         
@@ -1723,6 +1723,334 @@ async def toggle_system_setting(callback: CallbackQuery):
             await callback.answer("✅ Параметр обновлен", show_alert=False)
     
     await callback.answer()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MODERATION HANDLERS (Модерация уведомлений)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin_moderation_notifications")
+async def show_pending_notifications(callback: CallbackQuery, state: FSMContext):
+    """Показать уведомления ожидающие модерации"""
+    logger.info(f"[show_pending_notifications] Started | admin_id={callback.from_user.id}")
+    try:
+        await state.clear()
+        await state.set_state(AdminStates.moderation_notifications)
+        
+        async with AsyncSessionLocal() as session:
+            from services.notification_service import NotificationService
+            notifications = await NotificationService.get_pending_notifications(session)
+            
+            if not notifications:
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_notifications_menu")]
+                ])
+                await callback.message.edit_text(
+                    "✅ Нет уведомлений ожидающих модерации",
+                    reply_markup=keyboard
+                )
+                logger.info(f"[show_pending_notifications] No pending notifications")
+                return
+            
+            text = "🔴 УВЕДОМЛЕНИЯ НА МОДЕРАЦИИ\n"
+            text += "═══════════════════════════════════════\n\n"
+            
+            keyboard_buttons = []
+            for notif in notifications[:10]:  # Limit to 10
+                text += f"📋 {notif.type}\n"
+                text += f"   📝 {notif.title_ru[:30]}...\n"
+                text += f"   👤 ID: {notif.creator_id}\n"
+                text += f"   ⏰ {notif.created_at.strftime('%d.%m %H:%M')}\n\n"
+                
+                keyboard_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"📋 #{notif.id} - {notif.type}",
+                        callback_data=f"admin_notif_view_{notif.id}"
+                    )
+                ])
+            
+            keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_notifications_menu")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+            
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            logger.info(f"[show_pending_notifications] ✅ Found {len(notifications)} notifications")
+    
+    except Exception as e:
+        logger.error(f"[show_pending_notifications] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при загрузке", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_notif_view_"))
+async def view_notification_detail(callback: CallbackQuery, state: FSMContext):
+    """Просмотр деталей уведомления для модерации"""
+    logger.info(f"[view_notification_detail] Started | callback_data={callback.data}")
+    try:
+        notification_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            from services.notification_service import NotificationService
+            from services.user_service import UserService
+            
+            notification = await NotificationService.get_notification(session, notification_id)
+            if not notification:
+                await callback.answer("❌ Уведомление не найдено", show_alert=True)
+                return
+            
+            creator = await UserService.get_user(session, notification.creator_id)
+            
+            text = f"📋 УВЕДОМЛЕНИЕ #{notification.id}\n"
+            text += "═══════════════════════════════════════\n\n"
+            text += f"🏷️ Тип: {notification.type}\n"
+            text += f"👤 Создатель: @{creator.username if creator else 'Unknown'} (ID: {notification.creator_id})\n"
+            text += f"📝 Название: {notification.title_ru}\n"
+            text += f"📄 Описание: {notification.description_ru}\n"
+            text += f"📞 Телефон: {notification.phone}\n"
+            
+            if notification.address_text:
+                text += f"📍 Адрес: {notification.address_text}\n"
+            if notification.latitude and notification.longitude:
+                text += f"📍 Координаты: {notification.latitude}, {notification.longitude}\n"
+            
+            text += f"⏰ Создано: {notification.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_notif_approve_{notification_id}"),
+                    InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_notif_reject_{notification_id}")
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_moderation_notifications")]
+            ])
+            
+            # Send with photo if exists
+            if notification.photo_file_id:
+                await callback.message.answer_photo(
+                    photo=notification.photo_file_id,
+                    caption=text,
+                    reply_markup=keyboard
+                )
+            else:
+                await callback.message.edit_text(text, reply_markup=keyboard)
+            
+            logger.info(f"[view_notification_detail] ✅ Showed notification {notification_id}")
+    
+    except Exception as e:
+        logger.error(f"[view_notification_detail] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при загрузке", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_notif_approve_"))
+async def approve_notification(callback: CallbackQuery, state: FSMContext):
+    """Одобрить уведомление"""
+    logger.info(f"[approve_notification] Started | callback_data={callback.data}")
+    try:
+        notification_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            from services.notification_service import NotificationService
+            
+            notification = await NotificationService.approve_notification(
+                session, notification_id, callback.from_user.id
+            )
+            
+            if not notification:
+                await callback.answer("❌ Уведомление не найдено", show_alert=True)
+                return
+            
+            # Send to all users after approval
+            from services.user_service import UserService
+            from utils.bot import bot
+            
+            all_users = await UserService.get_all_users(session)
+            sent_count = 0
+            
+            for user in all_users:
+                if user.notifications_enabled and user.id != notification.creator_id:
+                    try:
+                        text = f"🔴 {notification.type}\n"
+                        text += f"═══════════════════════════════════════\n\n"
+                        text += f"📝 {notification.title_ru if user.language == 'RU' else notification.title_uz}\n"
+                        text += f"📄 {notification.description_ru if user.language == 'RU' else notification.description_uz}\n"
+                        text += f"📞 Телефон: {notification.phone}\n"
+                        
+                        if notification.address_text:
+                            text += f"📍 Адрес: {notification.address_text}\n"
+                        elif notification.latitude and notification.longitude:
+                            text += f"📍 Координаты: {notification.latitude}, {notification.longitude}\n"
+                        
+                        if notification.photo_file_id:
+                            await bot.send_photo(
+                                chat_id=user.telegram_id,
+                                photo=notification.photo_file_id,
+                                caption=text
+                            )
+                        else:
+                            await bot.send_message(chat_id=user.telegram_id, text=text)
+                        
+                        sent_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to send notification to user {user.telegram_id}: {e}")
+            
+            await callback.message.edit_text(
+                f"✅ Уведомление #{notification_id} одобрено и отправлено {sent_count} пользователям",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_moderation_notifications")]
+                ])
+            )
+            logger.info(f"[approve_notification] ✅ Approved notification {notification_id}, sent to {sent_count} users")
+    
+    except Exception as e:
+        logger.error(f"[approve_notification] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при одобрении", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_notif_reject_"))
+async def reject_notification(callback: CallbackQuery, state: FSMContext):
+    """Отклонить уведомление"""
+    logger.info(f"[reject_notification] Started | callback_data={callback.data}")
+    try:
+        notification_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            from services.notification_service import NotificationService
+            
+            notification = await NotificationService.reject_notification(
+                session, notification_id, callback.from_user.id
+            )
+            
+            if not notification:
+                await callback.answer("❌ Уведомление не найдено", show_alert=True)
+                return
+            
+            await callback.message.edit_text(
+                f"❌ Уведомление #{notification_id} отклонено",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_moderation_notifications")]
+                ])
+            )
+            logger.info(f"[reject_notification] ✅ Rejected notification {notification_id}")
+    
+    except Exception as e:
+        logger.error(f"[reject_notification] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при отклонении", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_user_search")
+async def start_user_search(callback: CallbackQuery, state: FSMContext):
+    """Начать поиск пользователей"""
+    logger.info(f"[start_user_search] Started | admin_id={callback.from_user.id}")
+    try:
+        await state.clear()
+        await state.set_state(AdminStates.user_search_input)
+        await callback.message.edit_text(
+            "🔍 ПОИСК ПОЛЬЗОВАТЕЛЯ\n\n"
+            "Введите имя, юзернейм или номер телефона:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")]
+            ])
+        )
+        logger.info(f"[start_user_search] ✅ Search input requested")
+    
+    except Exception as e:
+        logger.error(f"[start_user_search] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при поиске", show_alert=True)
+
+
+@router.message(AdminStates.user_search_input)
+async def search_users(message: Message, state: FSMContext):
+    """Поиск пользователей"""
+    logger.info(f"[search_users] Started | query={message.text}")
+    try:
+        query = message.text.strip()
+        
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import or_
+            
+            # Найти пользователей
+            users_query = select(User).where(
+                or_(
+                    User.username.ilike(f"%{query}%"),
+                    User.first_name.ilike(f"%{query}%"),
+                    User.phone.ilike(f"%{query}%")
+                )
+            ).limit(20)
+            
+            users_result = await session.execute(users_query)
+            users = users_result.scalars().all()
+            
+            if not users:
+                await message.answer("❌ Пользователей не найдено")
+                logger.info(f"[search_users] No users found for query={query}")
+                return
+            
+            # Показать результаты
+            text = f"✅ НАЙДЕНО: {len(users)} пользователей\n\n"
+            buttons = []
+            for user in users:
+                text += f"@{user.username or 'no_username'} ({user.first_name})\n"
+                text += f"   📞 {user.phone or 'Не указан'}\n"
+                text += f"   🇺🇿/🇷🇺 {user.language}\n"
+                text += f"   🚗 {'Да' if user.is_courier else 'Нет'}\n\n"
+                
+                buttons.append([InlineKeyboardButton(
+                    text=f"@{user.username or user.first_name}",
+                    callback_data=f"admin_user_view_{user.user_id}"
+                )])
+            
+            buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_menu")])
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await message.answer(text, reply_markup=keyboard)
+            logger.info(f"[search_users] ✅ Found {len(users)} users")
+    
+    except Exception as e:
+        logger.error(f"[search_users] ❌ Error | {str(e)}")
+        await message.answer("❌ Ошибка при поиске")
+
+
+@router.callback_query(F.data.startswith("admin_user_view_"))
+async def view_user_details(callback: CallbackQuery, state: FSMContext):
+    """Просмотр деталей пользователя"""
+    logger.info(f"[view_user_details] Started | callback_data={callback.data}")
+    try:
+        user_id = int(callback.data.split("_")[-1])
+        
+        async with AsyncSessionLocal() as session:
+            user = await UserService.get_user_by_id(session, user_id)
+            if not user:
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+            
+            text = f"👤 ПОЛЬЗОВАТЕЛЬ\n"
+            text += f"═══════════════════════════════════════\n\n"
+            text += f"🆔 ID: {user.user_id}\n"
+            text += f"👤 Имя: {user.first_name}\n"
+            text += f"🔸 Юзернейм: @{user.username or 'Нет'}\n"
+            text += f"📞 Телефон: {user.phone or 'Не указан'}\n"
+            text += f"🇺🇿/🇷🇺 Язык: {user.language}\n"
+            text += f"🌍 Гражданство: {user.citizenship or 'Не указано'}\n"
+            text += f"🚗 Курьер: {'Да' if user.is_courier else 'Нет'}\n"
+            text += f"🚫 Забанен: {'Да' if user.is_banned else 'Нет'}\n"
+            text += f"📢 Уведомления: {'Вкл' if user.notifications_enabled else 'Выкл'}\n"
+            text += f"📅 Зарегистрирован: {user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🚫 Забанить", callback_data=f"admin_user_ban_{user.user_id}"),
+                    InlineKeyboardButton(text="✅ Разбанить", callback_data=f"admin_user_unban_{user.user_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="🚗 Курьер", callback_data=f"admin_user_courier_{user.user_id}"),
+                    InlineKeyboardButton(text="📢 Уведомления", callback_data=f"admin_user_notif_{user.user_id}")
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_user_search")]
+            ])
+            
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            logger.info(f"[view_user_details] ✅ Showed user {user_id}")
+    
+    except Exception as e:
+        logger.error(f"[view_user_details] ❌ Error | {str(e)}")
+        await callback.answer("❌ Ошибка при загрузке", show_alert=True)
 
 
 def register_admin_handlers(dp):
