@@ -1075,35 +1075,6 @@ async def process_lost_person_location(message: Message, state: FSMContext):
 @router.message(UserStates.notification_person_phone)
 async def process_lost_person_phone(message: Message, state: FSMContext):
     """Process lost person phone and create notification"""
-    async with AsyncSessionLocal() as session:
-        user = await UserService.get_user(session, message.from_user.id)
-        if not user:
-            return
-        
-        data = await state.get_data()
-        
-        location_type = data.get("location_type", "ADDRESS")
-        address_text = None
-        latitude = None
-        longitude = None
-        maps_url = None
-        
-        if location_type == "geo" and data.get("location"):
-            parts = data["location"].split(",")
-            if len(parts) == 2:
-                try:
-                    latitude = float(parts[0])
-                    longitude = float(parts[1])
-                except ValueError:
-                    address_text = data["location"]
-        elif location_type == "maps":
-            maps_url = data.get("location")
-        else:
-            address_text = data.get("location")
-        
-        try:
-            logger.info(f"Пользователь {user.id} создает уведомление о потере человека")
-            
     logger.info(f"[process_lost_person_phone] Начало | user_id={message.from_user.id}")
     try:
         async with AsyncSessionLocal() as session:
@@ -1165,37 +1136,13 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
             
             logger.info(f"Уведомление {notification.id} создано и отправлено на модерацию")
             
+            # Отправить уведомление администраторам для модерации
+            await send_notification_to_admins_for_moderation(notification, message.bot)
+            
             # Удалить сообщение через 10 секунд
             await asyncio.sleep(10)
             try:
                 await success_msg.delete()
-            except Exception as e:
-                logger.error(f"Не удалось удалить сообщение: {str(e)}")
-            
-            await state.clear()
-        except Exception as e:
-            logger.error(f"Ошибка при создании уведомления: {str(e)}", exc_info=True)
-            await message.answer(
-                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
-                reply_markup=get_main_menu_keyboard(user.language)
-            )
-            await state.clear()
-            # Отправить уведомление администраторам для модерации
-            await send_notification_to_admins_for_moderation(notification, message.bot)
-            
-            # Отправить подтверждение пользователю
-            confirm_msg = await message.answer(
-                "✅ Объявление отправлено на модерацию\n⏳ Сообщение удалится через 10 секунд",
-                reply_markup=get_main_menu_keyboard(user.language)
-            )
-            
-            # Авто-удаление через 10 секунд
-            await asyncio.sleep(10)
-            try:
-                await message.bot.delete_message(
-                    chat_id=message.chat.id,
-                    message_id=confirm_msg.message_id
-                )
                 logger.info(f"[process_lost_person_phone] ✅ Сообщение удалено через 10 секунд")
             except Exception as e:
                 logger.warning(f"[process_lost_person_phone] Не удалось удалить сообщение: {str(e)}")
@@ -1205,6 +1152,7 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"[process_lost_person_phone] ❌ Ошибка: {str(e)}", exc_info=True)
         await message.answer("❌ Ошибка при создании объявления. Попробуйте позже.")
+        await state.clear()
 
 
 @router.callback_query(F.data == "notif_item")
