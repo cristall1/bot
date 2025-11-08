@@ -635,41 +635,41 @@ async def take_delivery(callback: CallbackQuery):
     logger.info(f"[take_delivery] Started | user_id={callback.from_user.id}, callback_data={callback.data}")
     try:
         delivery_id = int(callback.data.split("_")[2])
-        
+
         async with AsyncSessionLocal() as session:
             user = await UserService.get_user(session, callback.from_user.id)
             if not user:
                 logger.warning(f"[take_delivery] User not found | user_id={callback.from_user.id}")
                 return
-            
+
             # Assign delivery
             delivery = await DeliveryService.assign_courier(session, delivery_id, user.id)
-            
+
             if not delivery:
                 await callback.answer(t("delivery_already_taken", user.language), show_alert=True)
                 logger.warning(f"[take_delivery] Delivery already taken | delivery_id={delivery_id}")
                 return
 
-        # Notify creator with courier contact info
-        creator = await UserService.get_user_by_id(session, delivery.creator_id)
-        if creator:
-            try:
-                msg_text = t("delivery_accepted", creator.language)
-                msg_text += f"\n\n👤 Курьер: @{user.username or user.first_name}"
-                msg_text += f"\n📞 Телефон: {user.phone if user.phone else 'Не указан'}"
+            # Notify creator with courier contact info
+            creator = await UserService.get_user_by_id(session, delivery.creator_id)
+            if creator:
+                try:
+                    msg_text = t("delivery_accepted", creator.language)
+                    msg_text += f"\n\n👤 Курьер: @{user.username or user.first_name}"
+                    msg_text += f"\n📞 Телефон: {user.phone if user.phone else 'Не указан'}"
 
-                await callback.bot.send_message(creator.telegram_id, msg_text)
-                logger.info(f"[take_delivery] ✅ Notified creator | creator_id={creator.id}")
-            except Exception as e:
-                logger.error(f"[take_delivery] Failed to notify creator: {e}")
+                    await callback.bot.send_message(creator.telegram_id, msg_text)
+                    logger.info(f"[take_delivery] ✅ Notified creator | creator_id={creator.id}")
+                except Exception as e:
+                    logger.error(f"[take_delivery] Failed to notify creator: {e}")
 
             await callback.message.edit_text(t("delivery_taken", user.language))
             logger.info(f"[take_delivery] ✅ Delivery taken | delivery_id={delivery_id}, courier_id={user.id}")
             await callback.answer()
 
-            except Exception as e:
-            logger.error(f"[take_delivery] ❌ Error | user_id={callback.from_user.id}, error={str(e)}")
-            await callback.answer("❌ Ошибка при принятии заказа", show_alert=True)
+    except Exception as e:
+        logger.error(f"[take_delivery] Error | user_id={callback.from_user.id}, error={str(e)}")
+        await callback.answer("Error taking delivery", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("reject_delivery_"))
