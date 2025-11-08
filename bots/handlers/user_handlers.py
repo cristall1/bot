@@ -13,7 +13,9 @@ from services.delivery_service import DeliveryService
 from services.notification_service import NotificationService
 from services.shurta_service import ShurtaService
 from services.user_message_service import UserMessageService
+from services.statistics_service import StatisticsService
 from utils.logger import logger
+import asyncio
 
 router = Router()
 
@@ -979,51 +981,55 @@ async def process_lost_person_phone(message: Message, state: FSMContext):
         else:
             address_text = data.get("location")
         
-        notification = await NotificationService.create_notification(
-            session,
-            notification_type="PROPAJA_ODAM",
-            creator_id=user.id,
-            title=data["name"],
-            description=data["description"],
-            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
-            address_text=address_text,
-            latitude=latitude,
-            longitude=longitude,
-            maps_url=maps_url,
-            phone=message.text,
-            photo_file_id=data.get("photo_file_id")
-        )
-
-        # Notify all users
-        all_users = await UserService.get_all_users(session)
-        for target_user in all_users:
-            if target_user.notifications_enabled and target_user.id != user.id:
-                try:
-                    alert_text = t("notifications_alert_person", target_user.language,
-                                 name=data["name"],
-                                 description=data["description"],
-                                 location=data["location"],
-                                 phone=message.text)
-
-                    if data.get("photo_file_id"):
-                        await message.bot.send_photo(
-                            target_user.telegram_id,
-                            photo=data["photo_file_id"],
-                            caption=alert_text
-                        )
-                    else:
-                        await message.bot.send_message(
-                            target_user.telegram_id,
-                            alert_text
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
-        
-        await message.answer(
-            t("notifications_created", user.language),
-            reply_markup=get_main_menu_keyboard(user.language)
-        )
-        await state.clear()
+        try:
+            logger.info(f"Пользователь {user.id} создает уведомление о потере человека")
+            
+            notification = await NotificationService.create_notification(
+                session,
+                notification_type="PROPAJA_ODAM",
+                creator_id=user.id,
+                title=data["name"],
+                description=data["description"],
+                location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+                address_text=address_text,
+                latitude=latitude,
+                longitude=longitude,
+                maps_url=maps_url,
+                phone=message.text,
+                photo_file_id=data.get("photo_file_id")
+            )
+            
+            # Отправить сообщение пользователю о том, что заявка на модерации
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            # Записать активность для статистики
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "NOTIFICATION_CREATED",
+                {"type": "PROPAJA_ODAM", "notification_id": notification.id}
+            )
+            
+            logger.info(f"Уведомление {notification.id} создано и отправлено на модерацию")
+            
+            # Удалить сообщение через 10 секунд
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании уведомления: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
 
 
 @router.callback_query(F.data == "notif_item")
@@ -1231,51 +1237,55 @@ async def process_lost_item_phone(message: Message, state: FSMContext):
         else:
             address_text = data.get("location")
         
-        notification = await NotificationService.create_notification(
-            session,
-            notification_type="PROPAJA_NARSA",
-            creator_id=user.id,
-            title=data["what"],
-            description=data["description"],
-            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
-            address_text=address_text,
-            latitude=latitude,
-            longitude=longitude,
-            maps_url=maps_url,
-            phone=message.text,
-            photo_file_id=data.get("photo_file_id")
-        )
-
-        # Notify all users
-        all_users = await UserService.get_all_users(session)
-        for target_user in all_users:
-            if target_user.notifications_enabled and target_user.id != user.id:
-                try:
-                    alert_text = t("notifications_alert_item", target_user.language,
-                                 what=data["what"],
-                                 description=data["description"],
-                                 location=data["location"],
-                                 phone=message.text)
-
-                    if data.get("photo_file_id"):
-                        await message.bot.send_photo(
-                            target_user.telegram_id,
-                            photo=data["photo_file_id"],
-                            caption=alert_text
-                        )
-                    else:
-                        await message.bot.send_message(
-                            target_user.telegram_id,
-                            alert_text
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
-        
-        await message.answer(
-            t("notifications_created", user.language),
-            reply_markup=get_main_menu_keyboard(user.language)
-        )
-        await state.clear()
+        try:
+            logger.info(f"Пользователь {user.id} создает уведомление о потере вещи")
+            
+            notification = await NotificationService.create_notification(
+                session,
+                notification_type="PROPAJA_NARSA",
+                creator_id=user.id,
+                title=data["what"],
+                description=data["description"],
+                location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+                address_text=address_text,
+                latitude=latitude,
+                longitude=longitude,
+                maps_url=maps_url,
+                phone=message.text,
+                photo_file_id=data.get("photo_file_id")
+            )
+            
+            # Отправить сообщение пользователю о том, что заявка на модерации
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            # Записать активность для статистики
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "NOTIFICATION_CREATED",
+                {"type": "PROPAJA_NARSA", "notification_id": notification.id}
+            )
+            
+            logger.info(f"Уведомление {notification.id} создано и отправлено на модерацию")
+            
+            # Удалить сообщение через 10 секунд
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании уведомления: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
 
 
 @router.message(F.text.in_([t("menu_shurta", "RU"), t("menu_shurta", "UZ")]))
@@ -1443,46 +1453,49 @@ async def process_shurta_photo(message: Message, state: FSMContext):
         else:
             address_text = data.get("location_info")
         
-        alert = await ShurtaService.create_alert(
-            session,
-            creator_id=user.id,
-            description=data["description"],
-            location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
-            address_text=address_text,
-            latitude=latitude,
-            longitude=longitude,
-            maps_url=maps_url,
-            photo_file_id=photo_file_id
-        )
-        
-        # Notify all users
-        all_users = await UserService.get_all_users(session)
-        for target_user in all_users:
-            if target_user.notifications_enabled and target_user.id != user.id:
-                try:
-                    alert_text = t("shurta_alert", target_user.language,
-                                 description=data["description"],
-                                 location=data["location_info"])
-                    
-                    if photo_file_id:
-                        await message.bot.send_photo(
-                            target_user.telegram_id,
-                            photo=photo_file_id,
-                            caption=alert_text
-                        )
-                    else:
-                        await message.bot.send_message(
-                            target_user.telegram_id,
-                            alert_text
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to notify user {target_user.telegram_id}: {e}")
-        
-        await message.answer(
-            t("shurta_created", user.language),
-            reply_markup=get_main_menu_keyboard(user.language)
-        )
-        await state.clear()
+        try:
+            logger.info(f"Пользователь {user.id} создает Shurta-уведомление")
+            
+            alert = await ShurtaService.create_alert(
+                session,
+                creator_id=user.id,
+                description=data["description"],
+                location_type=location_type if location_type in ["ADDRESS", "GEO", "MAPS"] else "ADDRESS",
+                address_text=address_text,
+                latitude=latitude,
+                longitude=longitude,
+                maps_url=maps_url,
+                photo_file_id=photo_file_id
+            )
+            
+            success_msg = await message.answer(
+                "✅ Объявление отправлено на модерацию",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "SHURTA_CREATED",
+                {"alert_id": alert.id}
+            )
+            
+            logger.info(f"Shurta {alert.id} создан и отправлен на модерацию")
+            
+            await asyncio.sleep(10)
+            try:
+                await success_msg.delete()
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение: {str(e)}")
+            
+            await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при создании Shurta: {str(e)}", exc_info=True)
+            await message.answer(
+                "❌ Произошла ошибка при создании объявления. Попробуйте позже.",
+                reply_markup=get_main_menu_keyboard(user.language)
+            )
+            await state.clear()
 
 
 def register_user_handlers(dp: Dispatcher):

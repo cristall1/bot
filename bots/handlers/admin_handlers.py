@@ -790,19 +790,70 @@ async def approve_notification(callback: CallbackQuery):
         async with AsyncSessionLocal() as session:
             notification = await ModerationService.approve_notification(session, notif_id, admin_id)
             if notification:
-                # Получить список пользователей для рассылки
                 users = await ModerationService.get_users_for_notification(
                     session,
                     notification.type
                 )
-                recipients_count = len(users)
+                success_count = 0
+                fail_count = 0
                 
-                logger.info(f"Уведомление одобрено, рассылка {recipients_count} пользователям")
+                for target_user in users:
+                    try:
+                        message_text = await ModerationService.format_notification_for_user(
+                            notification,
+                            target_user.language or "RU"
+                        )
+                        if notification.photo_file_id:
+                            await callback.bot.send_photo(
+                                target_user.telegram_id,
+                                photo=notification.photo_file_id,
+                                caption=message_text
+                            )
+                        else:
+                            await callback.bot.send_message(
+                                target_user.telegram_id,
+                                message_text
+                            )
+                        
+                        if notification.location_type == "GEO" and notification.latitude and notification.longitude:
+                            await callback.bot.send_location(
+                                target_user.telegram_id,
+                                latitude=notification.latitude,
+                                longitude=notification.longitude
+                            )
+                        elif notification.location_type == "MAPS" and notification.maps_url:
+                            await callback.bot.send_message(
+                                target_user.telegram_id,
+                                f"📍 {notification.maps_url}"
+                            )
+                        elif notification.address_text:
+                            await callback.bot.send_message(
+                                target_user.telegram_id,
+                                f"📍 {notification.address_text}"
+                            )
+                        success_count += 1
+                    except Exception as send_error:
+                        fail_count += 1
+                        logger.error(f"Ошибка отправки уведомления пользователю {target_user.telegram_id}: {str(send_error)}")
+                
+                # Уведомить создателя
+                creator = await session.get(User, notification.creator_id)
+                if creator and creator.telegram_id:
+                    try:
+                        await callback.bot.send_message(
+                            creator.telegram_id,
+                            "✅ Ваше объявление одобрено и отправлено пользователям"
+                        )
+                    except Exception as creator_error:
+                        logger.error(f"Не удалось уведомить создателя {creator.telegram_id}: {str(creator_error)}")
+                
+                logger.info(f"Уведомление одобрено, отправлено {success_count}/{len(users)} пользователям")
                 await callback.message.edit_text(
-                    f"✅ Уведомление одобрено и отправлено {recipients_count} пользователям"
+                    f"✅ Уведомление одобрено и отправлено {success_count}/{len(users)} пользователям\n"
+                    f"Ошибок отправки: {fail_count}"
                 )
                 await callback.answer(
-                    f"✅ Уведомление отправлено {recipients_count} пользователям",
+                    f"✅ Уведомление отправлено {success_count}/{len(users)} пользователям",
                     show_alert=True
                 )
             else:
@@ -957,35 +1008,53 @@ async def view_shurta_detail(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("admin_shurta_approve_"))
 async def approve_shurta_alert(callback: CallbackQuery):
     """Одобрить Shurta алерт"""
-    alert_id = int(callback.data.split("_")[-1])
-    admin_id = callback.from_user.id
-    
-    async with AsyncSessionLocal() as session:
-        alert = await ShurtaService.approve_alert(session, alert_id, admin_id)
-        if alert:
-            await callback.answer("✅ Алерт одобрен", show_alert=True)
-        else:
-            await callback.answer("❌ Ошибка при одобрении", show_alert=True)
-    
-    await callback.message.edit_text("✅ Алерт одобрен")
-    await callback.answer()
+    try:
+        logger.info(f"Админ {callback.from_user.id} одобряет Shurta")
+        alert_id = int(callback.data.split("_")[-1])
+        admin_id = callback.from_user.id
+        
+        async with AsyncSessionLocal() as session:
+            alert = await ModerationService.approve_shurta(session, alert_id, admin_id)
+            if alert:
+                users = await ModerationService.get_users_for_notification(session, "SHURTA")
+                recipients_count = len(users)
+                
+                logger.info(f"Shurta одобрен, рассылка {recipients_count} пользователям")
+                await callback.message.edit_text(
+                    f"✅ Алерт одобрен и отправлен {recipients_count} пользователям"
+                )
+                await callback.answer(
+                    f"✅ Алерт отправлен {recipients_count} пользователям",
+                    show_alert=True
+                )
+            else:
+                logger.error(f"Не удалось одобрить Shurta {alert_id}")
+                await callback.answer("❌ Ошибка при одобрении", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка при одобрении Shurta: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_shurta_reject_"))
 async def reject_shurta_alert(callback: CallbackQuery):
     """Отклонить Shurta алерт"""
-    alert_id = int(callback.data.split("_")[-1])
-    admin_id = callback.from_user.id
-    
-    async with AsyncSessionLocal() as session:
-        alert = await ShurtaService.reject_alert(session, alert_id, admin_id)
-        if alert:
-            await callback.answer("✅ Алерт отклонен", show_alert=True)
-        else:
-            await callback.answer("❌ Ошибка при отклонении", show_alert=True)
-    
-    await callback.message.edit_text("✅ Алерт отклонен")
-    await callback.answer()
+    try:
+        logger.info(f"Админ {callback.from_user.id} отклоняет Shurta")
+        alert_id = int(callback.data.split("_")[-1])
+        admin_id = callback.from_user.id
+        
+        async with AsyncSessionLocal() as session:
+            alert = await ModerationService.reject_shurta(session, alert_id, admin_id)
+            if alert:
+                logger.info(f"Shurta {alert_id} отклонен")
+                await callback.message.edit_text("✅ Алерт отклонен")
+                await callback.answer("✅ Алерт отклонен", show_alert=True)
+            else:
+                logger.error(f"Не удалось отклонить Shurta {alert_id}")
+                await callback.answer("❌ Ошибка при отклонении", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка при отклонении Shurta: {str(e)}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 @router.callback_query(F.data == "admin_shurta_approved")
