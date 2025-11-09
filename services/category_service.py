@@ -436,6 +436,12 @@ class CategoryService:
             "audio_file_id": category.audio_file_id,
             "pdf_file_id": category.pdf_file_id,
             "link_url": category.link_url,
+            "location_type": category.location_type,
+            "location_address": category.location_address,
+            "latitude": category.latitude,
+            "longitude": category.longitude,
+            "geo_name": category.geo_name,
+            "maps_url": category.maps_url,
             "button_type": category.button_type,
             "buttons": [
                 {
@@ -454,3 +460,140 @@ class CategoryService:
                 for child in children
             ]
         }
+    
+    @staticmethod
+    async def reorder_category(
+        session: AsyncSession,
+        category_id: int,
+        direction: str  # "up" or "down"
+    ) -> bool:
+        """
+        Reorder category up or down within its parent's children
+        """
+        try:
+            category = await CategoryService.get_category(session, category_id)
+            if not category:
+                return False
+            
+            # Get siblings (categories with same parent_id)
+            siblings = await CategoryService.get_subcategories(
+                session, 
+                category.parent_id, 
+                active_only=False
+            ) if category.parent_id else await CategoryService.get_root_categories(
+                session,
+                active_only=False
+            )
+            
+            # Sort by order_index
+            siblings = sorted(siblings, key=lambda x: x.order_index)
+            current_index = next((i for i, c in enumerate(siblings) if c.id == category_id), None)
+            
+            if current_index is None:
+                return False
+            
+            if direction == "up" and current_index > 0:
+                # Swap with previous
+                siblings[current_index].order_index, siblings[current_index - 1].order_index = \
+                    siblings[current_index - 1].order_index, siblings[current_index].order_index
+            elif direction == "down" and current_index < len(siblings) - 1:
+                # Swap with next
+                siblings[current_index].order_index, siblings[current_index + 1].order_index = \
+                    siblings[current_index + 1].order_index, siblings[current_index].order_index
+            else:
+                return False
+            
+            await session.commit()
+            logger.info(f"[CategoryService] ✅ Категория {category_id} перемещена {direction}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка перемещения категории: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise
+    
+    @staticmethod
+    async def get_category_depth(session: AsyncSession, category_id: int) -> int:
+        """
+        Get depth level of category (0 for root, 1 for level 1, etc.)
+        """
+        try:
+            category = await CategoryService.get_category(session, category_id)
+            if not category:
+                return -1
+            
+            depth = 0
+            current = category
+            while current.parent_id:
+                depth += 1
+                current = await CategoryService.get_category(session, current.parent_id)
+                if not current:
+                    break
+            
+            return depth
+            
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка получения глубины категории: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    async def can_add_subcategory(session: AsyncSession, parent_id: int, max_depth: int = 4) -> bool:
+        """
+        Check if we can add a subcategory (respecting max depth limit)
+        """
+        try:
+            current_depth = await CategoryService.get_category_depth(session, parent_id)
+            # Depth is 0-indexed, so depth 3 means we're at level 4
+            return current_depth < (max_depth - 1)
+            
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка проверки возможности добавления подкатегории: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    async def reorder_button(
+        session: AsyncSession,
+        button_id: int,
+        direction: str  # "up" or "down"
+    ) -> bool:
+        """
+        Reorder button up or down within its category's buttons
+        """
+        try:
+            result = await session.execute(
+                select(CategoryButton).where(CategoryButton.id == button_id)
+            )
+            button = result.scalar_one_or_none()
+            if not button:
+                return False
+            
+            # Get all buttons for this category
+            category = await CategoryService.get_category(session, button.category_id)
+            if not category:
+                return False
+            
+            buttons = sorted(category.buttons, key=lambda x: x.order_index)
+            current_index = next((i for i, b in enumerate(buttons) if b.id == button_id), None)
+            
+            if current_index is None:
+                return False
+            
+            if direction == "up" and current_index > 0:
+                # Swap with previous
+                buttons[current_index].order_index, buttons[current_index - 1].order_index = \
+                    buttons[current_index - 1].order_index, buttons[current_index].order_index
+            elif direction == "down" and current_index < len(buttons) - 1:
+                # Swap with next
+                buttons[current_index].order_index, buttons[current_index + 1].order_index = \
+                    buttons[current_index + 1].order_index, buttons[current_index].order_index
+            else:
+                return False
+            
+            await session.commit()
+            logger.info(f"[CategoryService] ✅ Кнопка {button_id} перемещена {direction}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[CategoryService] ❌ Ошибка перемещения кнопки: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise

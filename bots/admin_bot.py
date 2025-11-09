@@ -13,11 +13,16 @@ class AdminBot:
     
     async def start(self):
         """Start the admin bot"""
-        from bots.handlers.admin_handlers import register_admin_handlers
-        from bots.handlers.admin_category_handlers import register_category_handlers
+        from bots.handlers import admin_handlers
+        from bots.handlers import admin_category_handlers
+        from bots.handlers import admin_alert_handlers
+        from bots.handlers import admin_export_handlers
         
-        register_admin_handlers(self.dp)
-        register_category_handlers(self.dp)
+        # Register all routers
+        self.dp.include_router(admin_handlers.router)
+        self.dp.include_router(admin_category_handlers.router)
+        self.dp.include_router(admin_alert_handlers.router)
+        self.dp.include_router(admin_export_handlers.router)
         
         await self.dp.start_polling(self.bot)
     
