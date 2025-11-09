@@ -5,7 +5,7 @@ LOCALES = {
         "choose_language": "Выберите язык:",
         "language_selected": "✅ Язык установлен: Русский",
         
-        # Main Menu (6 buttons)
+        # Main Menu (7 buttons)
         "main_menu": "🏠 Главное меню",
         "menu_documents": "📄 Документы",
         "menu_delivery": "🚚 Доставка",
@@ -13,6 +13,7 @@ LOCALES = {
         "menu_shurta": "🚨 Полиция",
         "menu_admin_contact": "👨‍💼 Написать админу",
         "menu_settings": "⚙️ Настройки",
+        "menu_webapp": "🌍 Путник",
         
         # Documents (Hujjat Yordami)
         "documents_title": "📄 Помощь с документами",
@@ -107,6 +108,10 @@ LOCALES = {
         "settings_notifications_enabled": "✅ Уведомления включены",
         "settings_notifications_disabled": "❌ Уведомления выключены",
         
+        # WebApp
+        "webapp_title": "🌍 Путник",
+        "webapp_description": "Откройте веб-приложение для удобного доступа к информации, категориям и контенту. Нажмите кнопку ниже для запуска:",
+        
         # Common
         "error": "❌ Произошла ошибка. Попробуйте позже.",
         "cancel": "❌ Отмена",
@@ -122,7 +127,7 @@ LOCALES = {
         "choose_language": "Tilni tanlang:",
         "language_selected": "✅ Til o'rnatildi: Oʻzbekcha",
         
-        # Main Menu (6 buttons)
+        # Main Menu (7 buttons)
         "main_menu": "🏠 Asosiy menyu",
         "menu_documents": "📄 Hujjat yordami",
         "menu_delivery": "🚚 Dostavka xizmati",
@@ -130,6 +135,7 @@ LOCALES = {
         "menu_shurta": "🚨 Shurta",
         "menu_admin_contact": "👨‍💼 Admin bilan bog'lanish",
         "menu_settings": "⚙️ Sozlamalar",
+        "menu_webapp": "🌍 Sayohat",
         
         # Documents (Hujjat Yordami)
         "documents_title": "📄 Hujjat yordami",
@@ -223,6 +229,10 @@ LOCALES = {
         "settings_toggle_notifications": "Xabarnomalarni almashtirish",
         "settings_notifications_enabled": "✅ Xabarnomalar yoqildi",
         "settings_notifications_disabled": "❌ Xabarnomalar o'chirildi",
+        
+        # WebApp
+        "webapp_title": "🌍 Sayohat",
+        "webapp_description": "Veb-ilovani ochib, barcha bo'limlar va yangiliklarga qulay kirish oling. Quyidagi tugmani bosing:",
         
         # Common
         "error": "❌ Xatolik yuz berdi. Keyinroq urinib ko'ring.",

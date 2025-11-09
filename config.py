@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     webapp_host: str = Field(default="0.0.0.0", alias="WEBAPP_HOST")
     webapp_port: int = Field(default=8000, alias="WEBAPP_PORT")
     webapp_public_url: str = Field(default="http://localhost:8000", alias="WEBAPP_PUBLIC_URL")
+    webapp_url: str = Field(default="", alias="WEBAPP_URL")
     webapp_cors_origins: str = Field(default="", alias="WEBAPP_CORS_ORIGINS")
     webapp_debug_skip_auth: bool = Field(default=False, alias="WEBAPP_DEBUG_SKIP_AUTH")
     webapp_debug_user_id: int = Field(default=5912983856, alias="WEBAPP_DEBUG_USER_ID")
