@@ -14,6 +14,8 @@ from services.statistics_service import StatisticsService
 from states import AdminStates
 from models import AlertType, Alert
 from utils.logger import logger
+from utils.message_helpers import delete_message_later
+from bot_registry import get_admin_bot, get_user_bot
 from datetime import datetime
 import asyncio
 
@@ -271,17 +273,28 @@ async def approve_alert(callback: CallbackQuery, state: FSMContext):
         
         await callback.answer("✅ Алерт одобрен!", show_alert=True)
         
-        # Ask if want to broadcast now
+        # DELETE MODERATION MESSAGE after processing (FIX #10)
+        admin_bot = get_admin_bot()
+        if admin_bot:
+            asyncio.create_task(
+                delete_message_later(admin_bot, callback.message.chat.id, callback.message.message_id, 10)
+            )
+        
+        # Send confirmation and ask if want to broadcast now
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📢 Разослать сейчас", callback_data=f"admin_alert_broadcast_{alert_id}")],
             [InlineKeyboardButton(text="🔙 К списку", callback_data="admin_alert_menu")]
         ])
         
-        await callback.message.edit_text(
+        msg = await callback.message.answer(
             f"✅ Алерт #{alert_id} одобрен!\n\n"
             "Хотите разослать его сейчас?",
             reply_markup=keyboard
         )
+        
+        # Auto-delete confirmation after 30 sec
+        if admin_bot:
+            asyncio.create_task(delete_message_later(admin_bot, callback.message.chat.id, msg.message_id, 30))
         
         logger.info(f"[admin_alert_approve] ✅ Админ {admin_id} одобрил алерт #{alert_id}")
         
