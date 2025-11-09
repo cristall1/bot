@@ -227,9 +227,22 @@
 4. UI updates to dark theme colors
 5. All elements remain readable
 
+### Scenario 6: Admin Content Management
+1. Admin opens WebApp and sees admin toolbar
+2. Admin toggles edit mode
+3. Admin creates new category with cover image
+4. Admin adds text, image, and button items
+5. Admin reorders items using up/down controls
+6. Admin verifies changes in preview mode
+7. Admin deactivates category
+8. Admin confirms category disappears in preview mode (but visible in edit mode)
+9. Admin uploads test file and attaches to item
+10. Admin deletes file and verifies physical cleanup
+
 ## Notes
 - Document any issues found with screenshots
 - Record browser/device combinations tested
 - Note performance metrics from Lighthouse
 - Save network logs for API request verification
 - Test with real content variety (long text, large images, etc.)
+- Test admin operations with both active and inactive items/categories

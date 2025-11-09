@@ -228,6 +228,135 @@ WEBAPP_CORS_ORIGINS=    # comma-separated allowed origins (optional)
 3. Select filter (all/language/citizenship/couriers)
 4. Confirm and send
 
+### 🌐 Web App Features
+
+#### Overview
+
+The Telegram Web App provides a rich content browsing experience with:
+- **Dynamic Categories**: Hierarchical content organization with customizable items
+- **No-Code Admin Editor**: Visual content management built into the web interface
+- **File Upload Support**: Images, documents, and videos with automatic optimization
+- **Responsive Design**: Mobile-first UI that works on all devices
+
+#### For Users
+
+Access the Web App through:
+1. Main menu button: **🌍 WebApp / Путник**
+2. Command: `/webapp`
+3. Direct link: Your `WEBAPP_URL` (configured in `.env`)
+
+The Web App displays:
+- **Categories**: Browse organized content with cover images
+- **Multiple Content Types**: Text, images, videos, documents, navigation buttons
+- **Rich Formatting**: Support for markdown-style text formatting
+- **Dark/Light Mode**: Automatic theme switching based on Telegram settings
+
+#### For Admins
+
+Admins see an **Admin Editor** with additional controls:
+
+1. **Toggle Edit Mode**: Switch between edit and preview modes
+2. **Category Management**:
+   - Create/edit/delete categories
+   - Set cover images and descriptions
+   - Reorder categories using drag controls
+   - Toggle visibility (active/inactive)
+
+3. **Item Management**:
+   - Add TEXT, IMAGE, VIDEO, DOCUMENT, LINK, or BUTTON items
+   - Inline editing with save/cancel actions
+   - Reorder items within categories
+   - Upload files directly from the editor
+
+4. **File Uploads**:
+   - Drag-and-drop or click to upload
+   - Image dimensions extracted automatically
+   - File validation (MIME type, size limits)
+   - Thumbnail generation for images
+
+#### Environment Variables
+
+```env
+# WebApp Core Settings
+WEBAPP_HOST=0.0.0.0                              # Host to bind the web server
+WEBAPP_PORT=8000                                 # Port for FastAPI server
+WEBAPP_PUBLIC_URL=http://localhost:8000          # Base URL for static assets and file URLs
+WEBAPP_URL=https://your-domain.com/webapp        # Public HTTPS URL for WebApp button in bot
+
+# Optional WebApp Settings
+WEBAPP_CORS_ORIGINS=https://example.com          # Comma-separated CORS origins (if needed)
+WEBAPP_DEBUG_SKIP_AUTH=false                     # Skip auth for local testing (NEVER in production)
+WEBAPP_DEBUG_USER_ID=12345                       # User ID for debug mode
+WEBAPP_UPLOAD_DIR=webapp/uploads                 # Directory for uploaded files
+WEBAPP_MAX_UPLOAD_SIZE=10485760                  # Max file size in bytes (default: 10MB)
+```
+
+**Important**: `WEBAPP_URL` must be HTTPS for Telegram Web Apps to work in production. Use services like ngrok for local development or deploy to a server with HTTPS.
+
+#### Running the Web App
+
+The Web App starts automatically when you run `python main.py`. It runs alongside the bots on the configured port.
+
+To run only the Web App (for development):
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run with uvicorn directly
+uvicorn webapp.server:create_app --factory --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Testing
+
+Run the automated test suite:
+
+```bash
+# All tests
+pytest
+
+# Only Web App tests
+pytest tests/test_webapp_*.py -v
+
+# With coverage
+pytest --cov=webapp --cov=services.webapp_content_service tests/test_webapp_*.py
+
+# Optional static analysis (run if ruff/flake8 configured)
+ruff check .
+# or
+flake8
+```
+
+Test categories:
+- `test_webapp_auth.py` - Authentication and security
+- `test_webapp_categories.py` - Category listing and retrieval
+- `test_webapp_admin.py` - Admin CRUD operations
+- `test_webapp_uploads.py` - File upload and storage
+- `test_webapp_schema.py` - Service layer and database models
+- `tests/test_webapp_integration.py` - End-to-end user + admin flows
+
+See `tests/conftest.py` for available fixtures and test utilities. For manual regression testing, follow `WEBAPP_USER_UI_QA_CHECKLIST.md`.
+
+#### Security Considerations
+
+1. **HTTPS Required**: Telegram Web Apps only work over HTTPS in production
+2. **InitData Validation**: Every request validates Telegram's signed init data
+3. **Admin Verification**: Admin endpoints check `user.is_admin` flag
+4. **File Upload Validation**: MIME types and sizes are validated
+5. **Debug Mode**: Never enable `WEBAPP_DEBUG_SKIP_AUTH` in production
+
+#### Deployment Checklist
+
+1. Set `WEBAPP_URL` to your public HTTPS domain
+2. Ensure `WEBAPP_PUBLIC_URL` matches where static files are served
+3. Configure reverse proxy (Nginx, Apache) for HTTPS termination
+4. Mount static files at `/webapp/static` and uploads at `/webapp/uploads`
+5. Set appropriate `WEBAPP_MAX_UPLOAD_SIZE` limits
+6. Add your domain to BotFather's web app settings
+7. Test with real Telegram clients (iOS, Android, Desktop)
+
+See `docs/webapp.md` for detailed architecture documentation.
+
 ### 📊 Statistics
 
 Admin dashboard shows:
@@ -417,6 +546,119 @@ WEBAPP_CORS_ORIGINS=    # разрешенные источники через �
    - 📊 Статистика
    - ⚙️ Настройки
    - 🔍 Анализ контента
+
+### 🌐 Web App — Веб-приложение
+
+#### Обзор
+
+Веб-приложение Telegram предоставляет богатый интерфейс для просмотра контента:
+- **Динамические категории**: Иерархическая структура с гибкими элементами
+- **Встроенный админ-редактор**: Визуальное управление контентом прямо в Web App
+- **Загрузка файлов**: Поддержка изображений, документов и видео с валидацией
+- **Адаптивный дизайн**: Оптимизировано для мобильных и десктопных клиентов Telegram
+
+#### Для пользователей
+
+Доступ к Web App осуществляется через:
+1. Кнопку меню: **🌍 Путник / WebApp**
+2. Команду: `/webapp`
+3. Прямую ссылку: значение `WEBAPP_URL` из `.env`
+
+Пользовательский интерфейс предоставляет:
+- **Категории**: Просмотр рубрик с описаниями и обложками
+- **Типы контента**: Тексты, изображения, видео, документы, кнопки навигации
+- **Форматирование**: Поддержка базового markdown
+- **Темы**: Автоматическое переключение между светлой и темной темой Telegram
+
+#### Для администраторов
+
+Админы видят дополнительные элементы управления:
+
+- Переключатель режимов «Редактирование / Просмотр»
+- Управление категориями (создание, редактирование, удаление, сортировка, обложки)
+- Управление элементами (TEXT, IMAGE, VIDEO, DOCUMENT, LINK, BUTTON)
+- Перетаскивание/сортировка элементов
+- Встроенная загрузка файлов с извлечением размеров изображений
+- Тосты с результатами операций и подтверждения перед удалением
+
+#### Переменные окружения
+
+```env
+# Основные настройки Web App
+WEBAPP_HOST=0.0.0.0                              # Хост для FastAPI
+WEBAPP_PORT=8000                                 # Порт сервера
+WEBAPP_PUBLIC_URL=http://localhost:8000          # База для статических файлов и ссылок
+WEBAPP_URL=https://ваш-домен.com/webapp          # Публичная HTTPS ссылка для кнопки в боте
+
+# Дополнительные настройки
+WEBAPP_CORS_ORIGINS=https://example.com          # Разрешённые origin'ы (опционально)
+WEBAPP_DEBUG_SKIP_AUTH=false                     # Пропуск авторизации (только для локалки)
+WEBAPP_DEBUG_USER_ID=12345                       # Пользователь по умолчанию в debug-режиме
+WEBAPP_UPLOAD_DIR=webapp/uploads                 # Каталог для загруженных файлов
+WEBAPP_MAX_UPLOAD_SIZE=10485760                  # Максимальный размер файла (10 МБ)
+```
+
+> ⚠️ `WEBAPP_URL` в продакшене обязательно должен указывать на HTTPS — Telegram Web App не работает по HTTP.
+
+#### Запуск Web App
+
+Веб-приложение запускается автоматически вместе с ботами командой `python main.py`.
+
+Для разработки можно поднять только Web App:
+
+```bash
+pip install -r requirements.txt
+uvicorn webapp.server:create_app --factory --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Тестирование
+
+```bash
+# Полный прогон
+pytest
+
+# Только тесты Web App
+pytest tests/test_webapp_*.py -v
+
+# Покрытие
+pytest --cov=webapp --cov=services.webapp_content_service tests/test_webapp_*.py
+
+# Дополнительно (если настроены линтеры)
+ruff check .
+# или
+flake8
+```
+
+Категории тестов:
+- `test_webapp_auth.py` — аутентификация и права доступа
+- `test_webapp_categories.py` — пользовательские эндпоинты категорий
+- `test_webapp_admin.py` — админские CRUD операции
+- `test_webapp_service.py` — сервисный слой (новый)
+- `test_webapp_integration.py` — сквозные сценарии (новый)
+- `test_webapp_file_upload.py` — загрузка и очистка файлов (новый)
+- Другие тесты Web App остаются для совместимости
+
+Заfixtures и утилиты отвечают `tests/conftest.py`. Для ручного тестирования следуйте чек-листу `WEBAPP_USER_UI_QA_CHECKLIST.md`.
+
+#### Безопасность и логирование
+
+1. **HTTPS обязателен** для публичного доступа
+2. **initData проверяется** для каждого запроса (подписанные данные Telegram)
+3. **Права администратора** проверяются на стороне API (`user.is_admin`)
+4. **Валидация файлов**: MIME-типы и размер
+5. **Debug-режим** (`WEBAPP_DEBUG_SKIP_AUTH`) нельзя включать в продакшене
+6. Логи пишутся на русском языке через `utils.logger` с emoji-иконками статуса
+
+#### Развёртывание
+
+1. Настройте `WEBAPP_URL` на публичный HTTPS-домен
+2. `WEBAPP_PUBLIC_URL` должен совпадать с адресом, откуда доступны статические файлы
+3. Настройте прокси (Nginx, Caddy и т.д.) для HTTPS и статики `/webapp/static`, `/webapp/uploads`
+4. Проверьте лимит загрузок (`WEBAPP_MAX_UPLOAD_SIZE`) и дисковое пространство
+5. Добавьте домен в настройках BotFather (Web App URL)
+6. Протестируйте с реальными клиентами Telegram (iOS, Android, Desktop)
+
+Подробнее об архитектуре см. `docs/webapp.md`.
 
 ### 🔧 Разработка
 
