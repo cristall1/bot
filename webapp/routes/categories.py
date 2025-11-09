@@ -35,6 +35,7 @@ class WebAppFileOut(BaseModel):
 
 class WebAppCategoryItemOut(BaseModel):
     id: int
+    category_id: int
     type: str
     text_content: Optional[str] = None
     rich_metadata: Optional[dict] = None
@@ -54,6 +55,7 @@ class WebAppCategoryOut(BaseModel):
     title: str
     description: Optional[str] = None
     cover_url: Optional[str] = None
+    cover_file_id: Optional[int] = None
     order_index: int
     is_active: bool
     items_count: int = 0
@@ -68,6 +70,7 @@ class WebAppCategoryDetailOut(BaseModel):
     title: str
     description: Optional[str] = None
     cover_url: Optional[str] = None
+    cover_file_id: Optional[int] = None
     order_index: int
     is_active: bool
     items: List[WebAppCategoryItemOut]
@@ -104,6 +107,7 @@ def serialize_category(
 ) -> Union[WebAppCategoryOut, WebAppCategoryDetailOut]:
     """Convert ORM category to response model"""
     cover_url = build_file_url(category.cover_file) if category.cover_file else None
+    cover_file_id = category.cover_file_id
 
     serialized_items: List[WebAppCategoryItemOut] = []
     for item in category.items:
@@ -128,6 +132,7 @@ def serialize_category(
         serialized_items.append(
             WebAppCategoryItemOut(
                 id=item.id,
+                category_id=item.category_id,
                 type=item.type,
                 text_content=item.text_content,
                 rich_metadata=item.rich_metadata,
@@ -147,6 +152,7 @@ def serialize_category(
             title=category.title,
             description=category.description,
             cover_url=cover_url,
+            cover_file_id=cover_file_id,
             order_index=category.order_index,
             is_active=category.is_active,
             items=ordered_items
@@ -159,6 +165,7 @@ def serialize_category(
         title=category.title,
         description=category.description,
         cover_url=cover_url,
+        cover_file_id=cover_file_id,
         order_index=category.order_index,
         is_active=category.is_active,
         items_count=items_count
