@@ -11,6 +11,54 @@ class AlertService:
     """Service for managing unified alert system"""
     
     @staticmethod
+    async def ensure_user_alert_preferences(
+        session: AsyncSession,
+        user_id: int
+    ) -> List[UserAlertPreference]:
+        """Ensure the user has preferences for all alert types."""
+        try:
+            result = await session.execute(
+                select(UserAlertPreference).where(UserAlertPreference.user_id == user_id)
+            )
+            existing_prefs = result.scalars().all()
+            existing_types = {pref.alert_type for pref in existing_prefs}
+            created_prefs: List[UserAlertPreference] = []
+            
+            for alert_type in AlertType:
+                if alert_type in existing_types:
+                    continue
+                is_enabled = alert_type == AlertType.SHURTA
+                pref = UserAlertPreference(
+                    user_id=user_id,
+                    alert_type=alert_type,
+                    is_enabled=is_enabled
+                )
+                session.add(pref)
+                created_prefs.append(pref)
+            
+            if created_prefs:
+                await session.commit()
+                for pref in created_prefs:
+                    await session.refresh(pref)
+                logger.info(
+                    "✅ [alert_service] Созданы настройки уведомлений для пользователя %s: %s",
+                    user_id,
+                    [pref.alert_type.value for pref in created_prefs]
+                )
+                return existing_prefs + created_prefs
+            
+            return existing_prefs
+        except Exception as e:
+            logger.error(
+                "❌ [alert_service] Ошибка создания настроек уведомлений пользователя %s: %s",
+                user_id,
+                str(e),
+                exc_info=True
+            )
+            await session.rollback()
+            raise
+    
+    @staticmethod
     async def create_alert(
         session: AsyncSession,
         alert_type: AlertType,
