@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     webapp_debug_user_id: int = Field(default=5912983856, alias="WEBAPP_DEBUG_USER_ID")
     webapp_upload_dir: str = Field(default="webapp/uploads", alias="WEBAPP_UPLOAD_DIR")
     webapp_max_upload_size: int = Field(default=10 * 1024 * 1024, alias="WEBAPP_MAX_UPLOAD_SIZE")  # 10MB default
+    webapp_version: str = Field(default="1.0.0", alias="WEBAPP_VERSION")
 
     @property
     def admin_ids_list(self) -> List[int]:
