@@ -1,10 +1,12 @@
 import asyncio
 import sys
+import uvicorn
 from database import init_db
 from bots.user_bot import UserBot
 from bots.admin_bot import AdminBot
 from utils.logger import logger
 from config import settings
+from webapp.server import create_app
 
 # Import all models to ensure they are registered with SQLAlchemy Base
 from models import (
@@ -160,23 +162,53 @@ async def main():
     logger.info("Initial data seeding completed")
     
     logger.info("Starting both bots...")
-    
+
     user_bot = UserBot()
     admin_bot = AdminBot()
-    
-    try:
-        await asyncio.gather(
-            user_bot.start(),
-            admin_bot.start()
+    webapp_app = create_app()
+
+    uvicorn_config = uvicorn.Config(
+        app=webapp_app,
+        host=settings.webapp_host,
+        port=settings.webapp_port,
+        log_config=None,
+        loop="asyncio"
+    )
+    webapp_server = uvicorn.Server(uvicorn_config)
+
+    async def start_webapp_server():
+        logger.info(
+            "Запускаем веб-сервер: "
+            f"{settings.webapp_public_url} (host={settings.webapp_host}, port={settings.webapp_port})"
         )
+        try:
+            await webapp_server.serve()
+        finally:
+            logger.info("Веб-сервер остановлен")
+
+    tasks = [
+        asyncio.create_task(user_bot.start(), name="user-bot"),
+        asyncio.create_task(admin_bot.start(), name="admin-bot"),
+        asyncio.create_task(start_webapp_server(), name="webapp-server")
+    ]
+
+    try:
+        await asyncio.gather(*tasks)
     except KeyboardInterrupt:
-        logger.info("Shutting down bots...")
+        logger.info("Получен сигнал остановки, завершаем работу сервисов...")
+    except Exception as e:
+        logger.error(f"Ошибка при работе сервисов: {e}")
+        raise
+    finally:
+        webapp_server.should_exit = True
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("Останавливаем ботов...")
         await user_bot.stop()
         await admin_bot.stop()
-        logger.info("Bots stopped")
-    except Exception as e:
-        logger.error(f"Error running bots: {e}")
-        sys.exit(1)
+        logger.info("Боты остановлены")
 
 
 if __name__ == "__main__":
