@@ -88,7 +88,7 @@ For local development without Telegram Web App, you can enable debug mode:
 
 ```env
 WEBAPP_DEBUG_SKIP_AUTH=true
-WEBAPP_DEBUG_USER_ID=5912983856
+WEBAPP_DEBUG_USER_ID=999999999
 ```
 
 **⚠️ IMPORTANT**: Never enable this in production! It bypasses all security checks.
@@ -97,9 +97,10 @@ WEBAPP_DEBUG_USER_ID=5912983856
 
 When `WEBAPP_DEBUG_SKIP_AUTH=true`:
 - Authentication checks are bypassed
-- A debug user is automatically created/used
+- A debug user is automatically created/used with admin rights
 - Warning is logged for every request
-- User ID is taken from `WEBAPP_DEBUG_USER_ID` setting
+- User ID is taken from `WEBAPP_DEBUG_USER_ID` setting (default: 999999999)
+- Debug user is automatically made an admin for testing admin features
 
 ## API Response Codes
 

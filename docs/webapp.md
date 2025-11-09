@@ -23,7 +23,7 @@ This document summarizes the backend architecture, key modules, and best practic
   - `verify_telegram_init_data()` for signature validation using the user bot token.
   - Dependencies `get_current_user` (regular authenticated user) and `require_admin_user` (admin-only).
 - Test fixtures in `tests/conftest.py` generate signed init data to simulate Telegram web app launches.
-- During development you can enable `WEBAPP_DEBUG_SKIP_AUTH=True` and set `WEBAPP_DEBUG_USER_ID` for bypassing signature validation; production deployments **must keep this disabled**.
+- During development you can enable `WEBAPP_DEBUG_SKIP_AUTH=True` (with `WEBAPP_DEBUG_USER_ID`, default `999999999`) to bypass signature validation. The backend will create an admin debug user automatically. Production deployments **must keep this disabled**.
 
 ### Routing Modules
 

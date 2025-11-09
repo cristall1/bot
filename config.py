@@ -26,8 +26,16 @@ class Settings(BaseSettings):
     webapp_public_url: str = Field(default="http://localhost:8000", alias="WEBAPP_PUBLIC_URL")
     webapp_url: str = Field(default="", alias="WEBAPP_URL")
     webapp_cors_origins: str = Field(default="", alias="WEBAPP_CORS_ORIGINS")
-    webapp_debug_skip_auth: bool = Field(default=False, alias="WEBAPP_DEBUG_SKIP_AUTH")
-    webapp_debug_user_id: int = Field(default=5912983856, alias="WEBAPP_DEBUG_USER_ID")
+    webapp_debug_skip_auth: bool = Field(
+        default=False,
+        alias="WEBAPP_DEBUG_SKIP_AUTH",
+        description="Skip Telegram auth for local development (НЕ включайте в продакшене)"
+    )
+    webapp_debug_user_id: int = Field(
+        default=999999999,
+        alias="WEBAPP_DEBUG_USER_ID",
+        description="Telegram ID отладочного пользователя (используется при пропуске авторизации)"
+    )
     webapp_upload_dir: str = Field(default="webapp/uploads", alias="WEBAPP_UPLOAD_DIR")
     webapp_max_upload_size: int = Field(default=10 * 1024 * 1024, alias="WEBAPP_MAX_UPLOAD_SIZE")  # 10MB default
     webapp_version: str = Field(default="1.0.0", alias="WEBAPP_VERSION")

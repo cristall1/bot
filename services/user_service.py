@@ -48,6 +48,56 @@ class UserService:
         return user
     
     @staticmethod
+    async def get_or_create_debug_user(
+        session: AsyncSession,
+        telegram_id: int,
+        username: str = "debug_user",
+        first_name: str = "Debug",
+        language: str = "RU"
+    ) -> User:
+        """Get or create a debug user with admin rights for local development."""
+        result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            updated = False
+            if not user.is_admin:
+                user.is_admin = True
+                updated = True
+            if user.is_banned:
+                user.is_banned = False
+                updated = True
+            if language and user.language != language:
+                user.language = language
+                updated = True
+            if username and user.username != username:
+                user.username = username
+                updated = True
+            if first_name and user.first_name != first_name:
+                user.first_name = first_name
+                updated = True
+            if updated:
+                await session.commit()
+                await session.refresh(user)
+                logger.info(f"Debug user updated: {telegram_id}")
+            return user
+        
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            language=language,
+            is_admin=True
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        logger.info(f"Debug user created: {telegram_id}")
+        return user
+    
+    @staticmethod
     async def get_user(session: AsyncSession, telegram_id: int) -> Optional[User]:
         """Get user by telegram ID"""
         result = await session.execute(
