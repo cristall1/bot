@@ -14,6 +14,7 @@ from utils.logger import logger
 from webapp.routes import router as webapp_router
 from webapp.routes.categories import router as categories_router
 from webapp.routes.admin import router as admin_router
+from webapp.storage import get_upload_directory
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -70,6 +71,10 @@ def create_app() -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/webapp/static", StaticFiles(directory=str(STATIC_DIR)), name="webapp_static")
         logger.info("Статические файлы веб-приложения подключены")
+
+    upload_dir = get_upload_directory()
+    app.mount("/webapp/uploads", StaticFiles(directory=str(upload_dir)), name="webapp_uploads")
+    logger.info("Каталог загрузок веб-приложения подключён")
 
     if TEMPLATES_DIR.exists():
         app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

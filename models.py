@@ -367,6 +367,11 @@ class WebAppFile(Base):
     file_type = Column(String(50), nullable=False)  # IMAGE, DOCUMENT, VIDEO, AUDIO
     mime_type = Column(String(100), nullable=True)
     file_size = Column(Integer, nullable=True)  # Size in bytes
+    original_name = Column(String(500), nullable=True)  # Original filename
+    description = Column(Text, nullable=True)  # Optional description
+    tag = Column(String(255), nullable=True)  # Optional tag label
+    width = Column(Integer, nullable=True)  # Image width (for images only)
+    height = Column(Integer, nullable=True)  # Image height (for images only)
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
