@@ -1,3 +1,5 @@
+import enum
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
@@ -344,3 +346,112 @@ class ModerationQueue(Base):
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
     moderator = relationship("User", foreign_keys=[moderator_id])
+
+
+class WebAppCategoryItemType(enum.Enum):
+    TEXT = "TEXT"
+    IMAGE = "IMAGE"
+    DOCUMENT = "DOCUMENT"
+    LINK = "LINK"
+    VIDEO = "VIDEO"
+    BUTTON = "BUTTON"
+
+
+class WebAppFile(Base):
+    """Files uploaded for Web App content"""
+    __tablename__ = "webapp_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_file_id = Column(String(500), nullable=True)  # Telegram file_id if uploaded via bot
+    storage_path = Column(String(500), nullable=True)  # Local storage path
+    file_type = Column(String(50), nullable=False)  # IMAGE, DOCUMENT, VIDEO, AUDIO
+    mime_type = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)  # Size in bytes
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    uploader = relationship("User", lazy="selectin")
+    category_items = relationship(
+        "WebAppCategoryItem",
+        foreign_keys="WebAppCategoryItem.file_id",
+        back_populates="file",
+        lazy="selectin"
+    )
+    categories_as_cover = relationship(
+        "WebAppCategory",
+        back_populates="cover_file",
+        lazy="selectin"
+    )
+
+
+class WebAppCategory(Base):
+    """Categories for Web App content"""
+    __tablename__ = "webapp_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    cover_file_id = Column(Integer, ForeignKey("webapp_files.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    items = relationship(
+        "WebAppCategoryItem",
+        back_populates="category",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="WebAppCategoryItem.order_index"
+    )
+    cover_file = relationship(
+        "WebAppFile",
+        foreign_keys=[cover_file_id],
+        back_populates="categories_as_cover",
+        lazy="selectin"
+    )
+    targeted_items = relationship(
+        "WebAppCategoryItem",
+        foreign_keys="WebAppCategoryItem.target_category_id",
+        lazy="selectin"
+    )
+
+
+class WebAppCategoryItem(Base):
+    """Content items for Web App categories"""
+    __tablename__ = "webapp_category_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("webapp_categories.id"), nullable=False, index=True)
+    type = Column(String(20), nullable=False)  # TEXT, IMAGE, DOCUMENT, LINK, VIDEO, BUTTON
+    text_content = Column(Text, nullable=True)  # Text content or caption
+    rich_metadata = Column(JSON, nullable=True)  # Rich metadata for complex items
+    file_id = Column(Integer, ForeignKey("webapp_files.id"), nullable=True)
+    button_text = Column(String(255), nullable=True)  # For BUTTON type
+    target_category_id = Column(Integer, ForeignKey("webapp_categories.id"), nullable=True)  # Navigation target
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    category = relationship(
+        "WebAppCategory",
+        foreign_keys=[category_id],
+        back_populates="items",
+        lazy="selectin"
+    )
+    file = relationship(
+        "WebAppFile",
+        foreign_keys=[file_id],
+        back_populates="category_items",
+        lazy="selectin"
+    )
+    target_category = relationship(
+        "WebAppCategory",
+        foreign_keys=[target_category_id],
+        lazy="selectin"
+    )
