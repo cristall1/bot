@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>Al-Azhar &amp; Dirassa WebApp</title>
+    <link rel="preconnect" href="https://telegram.org" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="stylesheet" href="{{ request.app.url_path_for('webapp_static', path='css/main.css') }}?v={{ version }}">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body data-mode="{{ mode }}">
+    <div id="app" class="app-shell">
+        <header class="app-header">
+            <div class="app-title-row">
+                <div>
+                    <h1 class="app-title">Al-Azhar &amp; Dirassa</h1>
+                    <p class="app-subtitle">Категории и материалы для пользователей Telegram</p>
+                </div>
+                <div class="app-header-meta" aria-live="polite">
+                    <span id="modeBadge" class="mode-badge">{{ 'Пользовательский режим' if mode == 'user' else 'Администратор' }}</span>
+                    <span class="version-chip" id="versionChip">v{{ version }}</span>
+                </div>
+            </div>
+        </header>
+
+        <nav class="floating-category-bar" aria-label="Категории (мобильный режим)">
+            <div id="floatingCategoryList" class="floating-category-bar-inner"></div>
+        </nav>
+
+        <div class="layout">
+            <aside class="category-sidebar" aria-label="Категории">
+                <div>
+                    <p class="sidebar-title">Категории</p>
+                    <nav id="categoryList" class="category-list" aria-label="Список категорий"></nav>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <nav id="breadcrumbs" class="breadcrumbs" aria-label="Навигация по категориям"></nav>
+
+                <section id="categoryHero" class="category-hero hidden" aria-hidden="true"></section>
+
+                <section class="content-header" aria-live="polite">
+                    <h2 id="categoryTitle" class="category-heading">Загрузка категорий...</h2>
+                    <p id="categoryDescription" class="category-intro"></p>
+                    <span id="categoryMeta" class="category-meta"></span>
+                </section>
+
+                <section id="loadingState" class="loading" role="status" aria-live="assertive" hidden>
+                    <div class="spinner" aria-hidden="true"></div>
+                    <p class="loading-text">Загружаем контент...</p>
+                </section>
+
+                <section id="errorState" class="error hidden" role="alert" aria-live="assertive">
+                    <p class="error-title">⚠️ Ошибка загрузки</p>
+                    <p id="errorMessage" class="error-message">Не удалось загрузить данные. Попробуйте снова.</p>
+                    <button id="retryButton" class="retry-button" type="button">Повторить</button>
+                </section>
+
+                <div id="emptyState" class="empty-state hidden" role="status" aria-live="polite">
+                    <div class="empty-icon" aria-hidden="true">📭</div>
+                    <p class="empty-text">Контент пока не доступен. Пожалуйста, зайдите позже.</p>
+                </div>
+
+                <section id="contentItems" class="content-items" aria-live="polite"></section>
+            </main>
+        </div>
+    </div>
+
+    <div id="imageModal" class="modal" role="dialog" aria-modal="true" aria-label="Просмотр изображения">
+        <div class="modal-content">
+            <button id="modalCloseButton" class="modal-close" type="button" aria-label="Закрыть">&times;</button>
+            <img id="modalImage" class="modal-image" src="" alt="Просмотр изображения">
+        </div>
+    </div>
+
+    <script id="webapp-config" type="application/json">{{ config | tojson }}</script>
+    <script type="module" src="{{ request.app.url_path_for('webapp_static', path='js/app.js') }}?v={{ version }}" defer></script>
+</body>
+</html>

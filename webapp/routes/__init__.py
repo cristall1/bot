@@ -1,9 +1,35 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, HTTPException
+from starlette.responses import HTMLResponse
 
+from config import settings
 from models import User
 from webapp.auth import get_current_user, require_admin_user
 
 router = APIRouter(prefix="/webapp", tags=["webapp"])
+
+
+@router.get("/", response_class=HTMLResponse)
+async def index(request: Request, mode: str = "user") -> HTMLResponse:
+    """Главная страница Telegram Web App."""
+    if not hasattr(request.app.state, 'templates'):
+        raise HTTPException(status_code=500, detail="Шаблоны не настроены")
+    
+    templates = request.app.state.templates
+    normalized_mode = mode if mode in {"user", "admin"} else "user"
+
+    api_base = settings.webapp_public_url.rstrip('/')
+    config = {
+        'apiBaseUrl': api_base,
+        'version': settings.webapp_version,
+        'mode': normalized_mode
+    }
+    
+    return templates.TemplateResponse('index.html', {
+        'request': request,
+        'version': settings.webapp_version,
+        'mode': normalized_mode,
+        'config': config
+    })
 
 
 @router.get("/health")
