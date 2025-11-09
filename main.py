@@ -12,7 +12,8 @@ from webapp.server import create_app
 from models import (
     User, Document, DocumentButton, Delivery, Notification,
     ShurtaAlert, UserMessage, Broadcast, TelegraphArticle,
-    Courier, SystemSetting, AdminLog
+    Courier, SystemSetting, AdminLog, WebAppCategory,
+    WebAppCategoryItem, WebAppCategoryItemType, WebAppFile
 )
 
 
@@ -147,6 +148,40 @@ async def seed_initial_data():
             
             await session.commit()
             logger.info("System settings seeded successfully")
+        
+        # Seed initial Web App content
+        result = await session.execute(select(WebAppCategory))
+        webapp_categories_exist = result.scalars().first()
+        
+        if not webapp_categories_exist:
+            logger.info("Seeding initial Web App content...")
+            try:
+                # Create example category
+                example_category = WebAppCategory(
+                    slug="welcome",
+                    title="Добро пожаловать",
+                    description="Вводная категория с информацией о боте",
+                    order_index=1,
+                    is_active=True
+                )
+                session.add(example_category)
+                await session.commit()
+                await session.refresh(example_category)
+                
+                # Add text item to the category
+                text_item = WebAppCategoryItem(
+                    category_id=example_category.id,
+                    type="TEXT",
+                    text_content="Добро пожаловать в наш бот! Здесь вы найдете полезную информацию и сервисы.",
+                    order_index=1,
+                    is_active=True
+                )
+                session.add(text_item)
+                await session.commit()
+                
+                logger.info("Initial Web App content seeded successfully")
+            except Exception as e:
+                logger.error(f"Error seeding Web App content: {e}")
 
 
 async def main():
