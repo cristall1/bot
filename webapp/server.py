@@ -12,6 +12,7 @@ from starlette.templating import Jinja2Templates
 from config import settings
 from utils.logger import logger
 from webapp.routes import router as webapp_router
+from webapp.routes.categories import router as categories_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(webapp_router)
+    app.include_router(categories_router)
 
     if STATIC_DIR.exists():
         app.mount("/webapp/static", StaticFiles(directory=str(STATIC_DIR)), name="webapp_static")
