@@ -233,17 +233,17 @@ class Courier(Base):
 
 class AlertType(enum.Enum):
     """11 alert types for the Al-Azhar community"""
-    PROPAJA_ODAM = "PROPAJA_ODAM"  # Lost person
-    PROPAJA_NARSA = "PROPAJA_NARSA"  # Lost item
     SHURTA = "SHURTA"  # Police alert
-    DOSTAVKA = "DOSTAVKA"  # Delivery order
-    ISH_TAKLIFNOMASI = "ISH_TAKLIFNOMASI"  # Job offer
-    UY_UYICHA = "UY_UYICHA"  # Housing/rental
-    TADBIR = "TADBIR"  # Event announcement
-    FAVQULODDA = "FAVQULODDA"  # Emergency
-    SOTISH = "SOTISH"  # Sale/marketplace
-    XIZMAT = "XIZMAT"  # Service offering
-    ELON = "ELON"  # General announcement
+    MISSING_PERSON = "MISSING_PERSON"  # Lost person
+    LOST_ITEM = "LOST_ITEM"  # Lost item
+    SCAM_WARNING = "SCAM_WARNING"  # Fraud / scam warning
+    MEDICAL_EMERGENCY = "MEDICAL_EMERGENCY"  # Medical emergency support
+    ACCOMMODATION_NEEDED = "ACCOMMODATION_NEEDED"  # Housing request
+    RIDE_SHARING = "RIDE_SHARING"  # Ride sharing / carpool
+    JOB_POSTING = "JOB_POSTING"  # Job offer
+    LOST_DOCUMENT = "LOST_DOCUMENT"  # Lost official document
+    EVENT_ANNOUNCEMENT = "EVENT_ANNOUNCEMENT"  # Event announcements
+    COURIER_NEEDED = "COURIER_NEEDED"  # Courier request
 
 
 class SystemSetting(Base):

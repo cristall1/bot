@@ -11,49 +11,49 @@ from utils.logger import logger
 
 
 ALERT_SETTINGS = {
-    AlertType.PROPAJA_ODAM: {
-        "name_ru": "Пропал человек",
-        "name_uz": "Odam yo'qoldi"
-    },
-    AlertType.PROPAJA_NARSA: {
-        "name_ru": "Пропала вещь",
-        "name_uz": "Narsa yo'qoldi"
-    },
     AlertType.SHURTA: {
         "name_ru": "Полиция",
         "name_uz": "Politsiya"
     },
-    AlertType.DOSTAVKA: {
-        "name_ru": "Доставка",
-        "name_uz": "Yetkazib berish"
+    AlertType.MISSING_PERSON: {
+        "name_ru": "Пропал человек",
+        "name_uz": "Odam yo'qoldi"
     },
-    AlertType.ISH_TAKLIFNOMASI: {
+    AlertType.LOST_ITEM: {
+        "name_ru": "Потеря вещи",
+        "name_uz": "Narsa yo'qoldi"
+    },
+    AlertType.SCAM_WARNING: {
+        "name_ru": "Предупреждение о мошенничестве",
+        "name_uz": "Firibgarlik haqida ogohlantirish"
+    },
+    AlertType.MEDICAL_EMERGENCY: {
+        "name_ru": "Медицинская помощь",
+        "name_uz": "Tibbiy yordam"
+    },
+    AlertType.ACCOMMODATION_NEEDED: {
+        "name_ru": "Нужно жилье",
+        "name_uz": "Uy-joy kerak"
+    },
+    AlertType.RIDE_SHARING: {
+        "name_ru": "Поиск попутчиков",
+        "name_uz": "Yo'lovchi qidirish"
+    },
+    AlertType.JOB_POSTING: {
         "name_ru": "Вакансия",
         "name_uz": "Ish taklifnomasi"
     },
-    AlertType.UY_UYICHA: {
-        "name_ru": "Жилье",
-        "name_uz": "Uy-joy"
+    AlertType.LOST_DOCUMENT: {
+        "name_ru": "Потеря документа",
+        "name_uz": "Hujjat yo'qoldi"
     },
-    AlertType.TADBIR: {
-        "name_ru": "Мероприятие",
-        "name_uz": "Tadbir"
+    AlertType.EVENT_ANNOUNCEMENT: {
+        "name_ru": "Анонс мероприятия",
+        "name_uz": "Tadbir haqida"
     },
-    AlertType.FAVQULODDA: {
-        "name_ru": "Чрезвычайное происшествие",
-        "name_uz": "Favqulodda holat"
-    },
-    AlertType.SOTISH: {
-        "name_ru": "Продажа",
-        "name_uz": "Sotish"
-    },
-    AlertType.XIZMAT: {
-        "name_ru": "Услуга",
-        "name_uz": "Xizmat"
-    },
-    AlertType.ELON: {
-        "name_ru": "Объявление",
-        "name_uz": "E'lon"
+    AlertType.COURIER_NEEDED: {
+        "name_ru": "Нужен курьер",
+        "name_uz": "Kuryer kerak"
     }
 }
 
