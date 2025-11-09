@@ -99,6 +99,22 @@ class UserStates(StatesGroup):
     settings_menu = State()
     settings_language = State()
     settings_notifications = State()
+    settings_alert_preferences = State()
+    
+    # Unified Alert Creation (11 types)
+    alert_type_selection = State()
+    alert_title = State()
+    alert_description = State()
+    alert_phone = State()
+    alert_location_choice = State()
+    alert_location_text = State()
+    alert_location_geo = State()
+    alert_location_maps = State()
+    alert_photo = State()
+    alert_review = State()
+    
+    # Category Navigation
+    browsing_categories = State()
 
 
 class AdminStates(StatesGroup):

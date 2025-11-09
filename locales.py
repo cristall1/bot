@@ -7,7 +7,7 @@ LOCALES = {
         
         # Main Menu (7 buttons)
         "main_menu": "🏠 Главное меню",
-        "menu_documents": "📄 Документы",
+        "menu_documents": "🗂️ Категории",
         "menu_delivery": "🚚 Доставка",
         "menu_notifications": "🔔 Потеря",
         "menu_shurta": "🚨 Полиция",
@@ -107,6 +107,42 @@ LOCALES = {
         "settings_toggle_notifications": "Переключить уведомления",
         "settings_notifications_enabled": "✅ Уведомления включены",
         "settings_notifications_disabled": "❌ Уведомления выключены",
+        "settings_alert_preferences": "🔔 Типы уведомлений",
+        "settings_alert_prefs_title": "🔔 Выберите типы уведомлений, которые хотите получать:",
+        "alert_pref_enabled": "✅",
+        "alert_pref_disabled": "❌",
+        
+        # 11 Alert Types
+        "alert_type_shurta": "🚨 Полиция",
+        "alert_type_missing_person": "👤 Пропал человек",
+        "alert_type_lost_item": "📦 Потеря вещи",
+        "alert_type_scam_warning": "⚠️ Мошенничество",
+        "alert_type_medical_emergency": "🏥 Медпомощь",
+        "alert_type_accommodation_needed": "🏠 Нужно жилье",
+        "alert_type_ride_sharing": "🚗 Попутчики",
+        "alert_type_job_posting": "💼 Вакансия",
+        "alert_type_lost_document": "📄 Потеря документа",
+        "alert_type_event_announcement": "🎉 Мероприятие",
+        "alert_type_courier_needed": "📦 Нужен курьер",
+        
+        # Alert Creation
+        "alert_menu_title": "📝 Создать объявление",
+        "alert_select_type": "Выберите тип объявления:",
+        "alert_title_prompt": "📝 Заголовок (имя, название, что?):",
+        "alert_description_prompt": "📄 Описание:",
+        "alert_phone_prompt": "📞 Телефон для связи:",
+        "alert_location_prompt": "📍 Как указать местоположение?",
+        "alert_photo_prompt": "📷 Фото (необязательно):",
+        "alert_skip_photo": "⏭ Пропустить",
+        "alert_created": "✅ Объявление создано! Отправлено на модерацию.",
+        "alert_approved_notification": "✅ Ваше объявление одобрено и опубликовано!",
+        "alert_rejected_notification": "❌ Ваше объявление отклонено. Причина: {reason}",
+        
+        # Categories & Navigation
+        "category_back": "⬅️ Назад",
+        "category_main_menu": "🏠 Главное меню",
+        "category_no_content": "Контент пока не добавлен.",
+        "category_select": "Выберите раздел:",
         
         # WebApp
         "webapp_title": "🌍 Путник",
@@ -129,7 +165,7 @@ LOCALES = {
         
         # Main Menu (7 buttons)
         "main_menu": "🏠 Asosiy menyu",
-        "menu_documents": "📄 Hujjat yordami",
+        "menu_documents": "🗂️ Kategoriyalar",
         "menu_delivery": "🚚 Dostavka xizmati",
         "menu_notifications": "🔔 Propaja",
         "menu_shurta": "🚨 Shurta",
@@ -229,6 +265,42 @@ LOCALES = {
         "settings_toggle_notifications": "Xabarnomalarni almashtirish",
         "settings_notifications_enabled": "✅ Xabarnomalar yoqildi",
         "settings_notifications_disabled": "❌ Xabarnomalar o'chirildi",
+        "settings_alert_preferences": "🔔 Xabarnoma turlari",
+        "settings_alert_prefs_title": "🔔 Qaysi turdagi xabarnomalarni olishni xohlaysiz:",
+        "alert_pref_enabled": "✅",
+        "alert_pref_disabled": "❌",
+        
+        # 11 Alert Types
+        "alert_type_shurta": "🚨 Politsiya",
+        "alert_type_missing_person": "👤 Odam yo'qoldi",
+        "alert_type_lost_item": "📦 Narsa yo'qoldi",
+        "alert_type_scam_warning": "⚠️ Firibgarlik",
+        "alert_type_medical_emergency": "🏥 Tibbiy yordam",
+        "alert_type_accommodation_needed": "🏠 Uy-joy kerak",
+        "alert_type_ride_sharing": "🚗 Yo'lovchi qidirish",
+        "alert_type_job_posting": "💼 Ish taklifnomasi",
+        "alert_type_lost_document": "📄 Hujjat yo'qoldi",
+        "alert_type_event_announcement": "🎉 Tadbir e'loni",
+        "alert_type_courier_needed": "📦 Kuryer kerak",
+        
+        # Alert Creation
+        "alert_menu_title": "📝 E'lon yaratish",
+        "alert_select_type": "E'lon turini tanlang:",
+        "alert_title_prompt": "📝 Sarlavha (ism, nom, nima?):",
+        "alert_description_prompt": "📄 Tavsif:",
+        "alert_phone_prompt": "📞 Aloqa telefoni:",
+        "alert_location_prompt": "📍 Joylashuvni qanday ko'rsatamiz?",
+        "alert_photo_prompt": "📷 Foto (ixtiyoriy):",
+        "alert_skip_photo": "⏭ O'tkazib yuborish",
+        "alert_created": "✅ E'lon yaratildi! Moderatsiyaga yuborildi.",
+        "alert_approved_notification": "✅ E'loningiz tasdiqlandi va e'lon qilindi!",
+        "alert_rejected_notification": "❌ E'loningiz rad etildi. Sabab: {reason}",
+        
+        # Categories & Navigation
+        "category_back": "⬅️ Orqaga",
+        "category_main_menu": "🏠 Asosiy menyu",
+        "category_no_content": "Kontent hali qo'shilmagan.",
+        "category_select": "Bo'limni tanlang:",
         
         # WebApp
         "webapp_title": "🌍 Sayohat",

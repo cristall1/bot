@@ -21,17 +21,17 @@ router = Router()
 
 # Alert type names in Russian
 ALERT_TYPE_NAMES_RU = {
-    AlertType.PROPAJA_ODAM: "👤 Пропал человек",
-    AlertType.PROPAJA_NARSA: "📦 Пропала вещь",
     AlertType.SHURTA: "🚨 Полиция",
-    AlertType.DOSTAVKA: "🚚 Доставка",
-    AlertType.ISH_TAKLIFNOMASI: "💼 Вакансия",
-    AlertType.UY_UYICHA: "🏠 Жилье",
-    AlertType.TADBIR: "📅 Мероприятие",
-    AlertType.FAVQULODDA: "🚨 ЧП",
-    AlertType.SOTISH: "🛒 Продажа",
-    AlertType.XIZMAT: "🔧 Услуга",
-    AlertType.ELON: "📢 Объявление"
+    AlertType.MISSING_PERSON: "👤 Пропал человек",
+    AlertType.LOST_ITEM: "📦 Потеря вещи",
+    AlertType.SCAM_WARNING: "⚠️ Мошенничество",
+    AlertType.MEDICAL_EMERGENCY: "🏥 Медпомощь",
+    AlertType.ACCOMMODATION_NEEDED: "🏠 Нужно жилье",
+    AlertType.RIDE_SHARING: "🚗 Попутчики",
+    AlertType.JOB_POSTING: "💼 Вакансия",
+    AlertType.LOST_DOCUMENT: "📄 Потеря документа",
+    AlertType.EVENT_ANNOUNCEMENT: "🎉 Мероприятие",
+    AlertType.COURIER_NEEDED: "📦 Нужен курьер"
 }
 
 

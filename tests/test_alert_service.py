@@ -15,7 +15,7 @@ async def test_create_alert(db_session: AsyncSession, admin_user: User):
     """Test creating an alert"""
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         creator_id=admin_user.id,
         title="Пропал Иван Иванов",
         description="Пропал человек 30 лет, рост 180см",
@@ -26,7 +26,7 @@ async def test_create_alert(db_session: AsyncSession, admin_user: User):
     
     assert alert is not None
     assert alert.id is not None
-    assert alert.alert_type == AlertType.PROPAJA_ODAM
+    assert alert.alert_type == AlertType.MISSING_PERSON
     assert alert.creator_id == admin_user.id
     assert alert.title == "Пропал Иван Иванов"
     assert alert.is_approved == False
@@ -62,13 +62,13 @@ async def test_get_pending_alerts(db_session: AsyncSession, admin_user: User):
     # Create multiple alerts
     await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         creator_id=admin_user.id,
         description="Alert 1"
     )
     await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.PROPAJA_NARSA,
+        alert_type=AlertType.LOST_ITEM,
         creator_id=admin_user.id,
         description="Alert 2"
     )
@@ -80,10 +80,10 @@ async def test_get_pending_alerts(db_session: AsyncSession, admin_user: User):
     # Get filtered by type
     filtered = await AlertService.get_pending_alerts(
         db_session,
-        alert_type=AlertType.PROPAJA_ODAM
+        alert_type=AlertType.MISSING_PERSON
     )
     assert len(filtered) >= 1
-    assert all(a.alert_type == AlertType.PROPAJA_ODAM for a in filtered)
+    assert all(a.alert_type == AlertType.MISSING_PERSON for a in filtered)
 
 
 @pytest.mark.asyncio
@@ -92,13 +92,13 @@ async def test_pending_count_by_type(db_session: AsyncSession, admin_user: User)
     # Create alerts of different types
     await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         creator_id=admin_user.id,
         description="Person 1"
     )
     await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         creator_id=admin_user.id,
         description="Person 2"
     )
@@ -112,8 +112,8 @@ async def test_pending_count_by_type(db_session: AsyncSession, admin_user: User)
     # Get counts
     counts = await AlertService.get_pending_count_by_type(db_session)
     
-    assert AlertType.PROPAJA_ODAM.value in counts
-    assert counts[AlertType.PROPAJA_ODAM.value] >= 2
+    assert AlertType.MISSING_PERSON.value in counts
+    assert counts[AlertType.MISSING_PERSON.value] >= 2
     assert counts[AlertType.SHURTA.value] >= 1
 
 
@@ -123,7 +123,7 @@ async def test_approve_alert(db_session: AsyncSession, admin_user: User):
     # Create alert
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.DOSTAVKA,
+        alert_type=AlertType.COURIER_NEEDED,
         creator_id=admin_user.id,
         description="Доставка посылки"
     )
@@ -148,7 +148,7 @@ async def test_reject_alert(db_session: AsyncSession, admin_user: User):
     # Create alert
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.ISH_TAKLIFNOMASI,
+        alert_type=AlertType.JOB_POSTING,
         creator_id=admin_user.id,
         description="Вакансия программиста"
     )
@@ -175,7 +175,7 @@ async def test_get_broadcast_targets(db_session: AsyncSession, admin_user: User,
     # Create alert with language filter
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.TADBIR,
+        alert_type=AlertType.EVENT_ANNOUNCEMENT,
         creator_id=admin_user.id,
         description="Мероприятие",
         target_languages=["RU"]
@@ -200,7 +200,7 @@ async def test_mark_broadcast_sent(db_session: AsyncSession, admin_user: User):
     # Create and approve alert
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.ELON,
+        alert_type=AlertType.EVENT_ANNOUNCEMENT,
         creator_id=admin_user.id,
         description="Объявление"
     )
@@ -225,31 +225,31 @@ async def test_user_preferences(db_session: AsyncSession, regular_user: User):
     # Get default preferences (all should be enabled)
     prefs = await AlertService.get_user_preferences(db_session, regular_user.id)
     
-    assert AlertType.PROPAJA_ODAM in prefs
-    assert prefs[AlertType.PROPAJA_ODAM] == True  # Default enabled
+    assert AlertType.MISSING_PERSON in prefs
+    assert prefs[AlertType.MISSING_PERSON] == True  # Default enabled
     
     # Disable one type
     await AlertService.update_user_preference(
         db_session,
         user_id=regular_user.id,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         is_enabled=False
     )
     
     # Check updated preference
     prefs = await AlertService.get_user_preferences(db_session, regular_user.id)
-    assert prefs[AlertType.PROPAJA_ODAM] == False
+    assert prefs[AlertType.MISSING_PERSON] == False
     
     # Enable it back
     await AlertService.update_user_preference(
         db_session,
         user_id=regular_user.id,
-        alert_type=AlertType.PROPAJA_ODAM,
+        alert_type=AlertType.MISSING_PERSON,
         is_enabled=True
     )
     
     prefs = await AlertService.get_user_preferences(db_session, regular_user.id)
-    assert prefs[AlertType.PROPAJA_ODAM] == True
+    assert prefs[AlertType.MISSING_PERSON] == True
 
 
 @pytest.mark.asyncio
@@ -258,13 +258,13 @@ async def test_alert_statistics(db_session: AsyncSession, admin_user: User):
     # Create various alerts
     alert1 = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.SOTISH,
+        alert_type=AlertType.LOST_ITEM,
         creator_id=admin_user.id,
         description="Продажа авто"
     )
     alert2 = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.XIZMAT,
+        alert_type=AlertType.JOB_POSTING,
         creator_id=admin_user.id,
         description="Услуга репетитора"
     )
@@ -288,7 +288,7 @@ async def test_get_approved_alerts(db_session: AsyncSession, admin_user: User):
     # Create and approve alert
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.UY_UYICHA,
+        alert_type=AlertType.ACCOMMODATION_NEEDED,
         creator_id=admin_user.id,
         description="Сдается квартира"
     )
@@ -307,7 +307,7 @@ async def test_alert_with_location(db_session: AsyncSession, admin_user: User):
     """Test creating alert with location"""
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.FAVQULODDA,
+        alert_type=AlertType.MEDICAL_EMERGENCY,
         creator_id=admin_user.id,
         description="ДТП на перекрестке",
         location_type="GEO",
@@ -327,7 +327,7 @@ async def test_alert_with_filters(db_session: AsyncSession, admin_user: User):
     """Test creating alert with target filters"""
     alert = await AlertService.create_alert(
         db_session,
-        alert_type=AlertType.TADBIR,
+        alert_type=AlertType.EVENT_ANNOUNCEMENT,
         creator_id=admin_user.id,
         description="Мероприятие только для граждан УЗ",
         target_languages=["UZ"],
