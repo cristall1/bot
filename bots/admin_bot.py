@@ -1,6 +1,7 @@
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import settings
+from bot_registry import BotRegistry
 
 
 class AdminBot:
@@ -10,6 +11,7 @@ class AdminBot:
         self.bot = Bot(token=settings.admin_bot_token)
         self.storage = MemoryStorage()
         self.dp = Dispatcher(storage=self.storage)
+        BotRegistry.set_admin_bot(self.bot)
     
     async def start(self):
         """Start the admin bot"""
@@ -29,3 +31,4 @@ class AdminBot:
     async def stop(self):
         """Stop the admin bot"""
         await self.bot.session.close()
+        BotRegistry.set_admin_bot(None)

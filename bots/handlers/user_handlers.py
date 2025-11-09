@@ -25,7 +25,9 @@ from services.statistics_service import StatisticsService
 from services.geolocation_service import GeolocationService
 from models import AlertType
 from utils.logger import logger
+from utils.message_helpers import send_menu_auto_delete, delete_message_later
 from config import settings
+from bot_registry import get_admin_bot, get_user_bot
 
 router = Router()
 
@@ -33,11 +35,19 @@ router = Router()
 # HELPER FUNCTIONS
 # ==============================================================================
 
-async def send_alert_to_admins_for_moderation(alert, bot):
+async def send_alert_to_admins_for_moderation(alert):
     """
-    Отправить алерт всем администраторам для модерации
-    Send alert to all admins for moderation
+    Отправить алерт всем администраторам для модерации через ADMIN BOT
+    Send alert to all admins for moderation via ADMIN BOT
+    
+    ИСПРАВЛЕНИЕ: Теперь отправляется через Admin Bot, а НЕ через User Bot!
+    FIX: Now sends via Admin Bot, NOT User Bot!
     """
+    admin_bot = get_admin_bot()
+    if not admin_bot:
+        logger.error(f"[send_alert_to_admins] ❌ Admin Bot не доступен!")
+        return
+    
     logger.info(f"[send_alert_to_admins] Начало | alert_id={alert.id} type={alert.alert_type.value}")
     try:
         async with AsyncSessionLocal() as session:
@@ -83,37 +93,53 @@ async def send_alert_to_admins_for_moderation(alert, bot):
                     text += f"\nОт пользователя: {alert.creator_id}\n"
                     text += f"ID алерта: {alert.id}\n"
                     
+                    # 2-ROW BUTTON LAYOUT (COMPACT)
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [
-                            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_approve_alert_{alert.id}"),
-                            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_reject_alert_{alert.id}")
+                            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin_alert_approve_{alert.id}"),
+                            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin_alert_reject_{alert.id}")
                         ]
                     ])
                     
                     # Send location if available
                     if alert.latitude and alert.longitude:
-                        await bot.send_location(
+                        await admin_bot.send_location(
                             chat_id=admin.telegram_id,
                             latitude=alert.latitude,
                             longitude=alert.longitude
                         )
                     
-                    # Send photo or text
+                    # Send photo or text via ADMIN BOT
                     if alert.photo_file_id:
-                        await bot.send_photo(
+                        msg = await admin_bot.send_photo(
                             chat_id=admin.telegram_id,
                             photo=alert.photo_file_id,
                             caption=text,
                             reply_markup=keyboard
                         )
                     else:
-                        await bot.send_message(
+                        msg = await admin_bot.send_message(
                             chat_id=admin.telegram_id,
                             text=text,
                             reply_markup=keyboard
                         )
                     
-                    logger.info(f"[send_alert_to_admins] ✅ Отправлено администратору {admin.telegram_id}")
+                    # Store message_id for later deletion after moderation
+                    async with AsyncSessionLocal() as mod_session:
+                        from models import ModerationQueue
+                        from sqlalchemy import select, update
+                        
+                        # Update moderation queue with message_id
+                        stmt = (
+                            update(ModerationQueue)
+                            .where(ModerationQueue.entity_type == "ALERT")
+                            .where(ModerationQueue.entity_id == alert.id)
+                            .values(admin_message_id=msg.message_id)
+                        )
+                        await mod_session.execute(stmt)
+                        await mod_session.commit()
+                    
+                    logger.info(f"[send_alert_to_admins] ✅ Отправлено администратору {admin.telegram_id} через Admin Bot")
                 except Exception as e:
                     logger.error(f"[send_alert_to_admins] ❌ Ошибка отправки администратору {admin.telegram_id}: {str(e)}")
         
@@ -916,16 +942,16 @@ async def create_alert_from_state(message: Message, state: FSMContext, user, ses
             expires_hours=48  # Default expiration
         )
         
-        # Send to admins for moderation
-        from aiogram import Bot
-        bot = message.bot
-        asyncio.create_task(send_alert_to_admins_for_moderation(alert, bot))
+        # Send to admins for moderation via ADMIN BOT
+        asyncio.create_task(send_alert_to_admins_for_moderation(alert))
         
-        # Confirm to user
-        await message.answer(
+        # Confirm to user with auto-delete after 30 sec
+        msg = await message.answer(
             t("alert_created", user.language),
             reply_markup=get_main_menu_keyboard(user.language)
         )
+        # Auto-delete confirmation after 30 seconds
+        asyncio.create_task(delete_message_later(message.bot, message.chat.id, msg.message_id, 30))
         
         await StatisticsService.track_activity(
             session,
