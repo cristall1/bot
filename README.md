@@ -19,6 +19,7 @@ This is a complete Telegram bot system consisting of two bots:
 #### User Bot Features:
 - 🌐 **Bilingual Interface**: Full Russian and Uzbek language support
 - 🌍 **Multi-Citizenship Support**: Uzbekistan, Russia, Kazakhstan, Kyrgyzstan
+- 🌐 **Web App Integration**: Access the full Web App directly from the bot menu with a dedicated button
 - 📚 **Hierarchical Categories**: 4-level category system (Dirassa/Al-Azhar → Citizenship → Stage → Content)
 - 🏢 **Service Requests**: Request or offer services (tutoring, accommodation, courier, etc.)
 - 🚚 **Cairo Courier System**: Become a courier and earn by delivering packages
@@ -159,6 +160,7 @@ LOG_FILE=bot.log
 WEBAPP_HOST=0.0.0.0
 WEBAPP_PORT=8000
 WEBAPP_PUBLIC_URL=http://localhost:8000
+WEBAPP_URL=https://your-domain.com/webapp  # Public HTTPS URL for WebApp button
 WEBAPP_CORS_ORIGINS=    # comma-separated allowed origins (optional)
 ```
 
@@ -179,13 +181,14 @@ WEBAPP_CORS_ORIGINS=    # comma-separated allowed origins (optional)
 2. **Choose Language**: Russian or Uzbek
 3. **Select Citizenship**: UZ, RU, KZ, or KG
 4. **Main Menu**:
-   - 📚 Categories - Browse Al-Azhar/Dirassa info
-   - 🏢 Services - Request or offer services
-   - 🔍 Search - Find content
-   - 📞 Contact Admin - Send message
-   - 🚚 Become Courier - Register as Cairo courier
+   - 🌍 WebApp - Open the full Web App interface
+   - 📄 Documents - Browse documents by citizenship
+   - 🚚 Delivery - Request or offer delivery services
+   - 🔔 Notifications - Report lost people or items
+   - 🚨 Police - Report safety alerts
+   - 👨‍💼 Contact Admin - Send message
    - ⚙️ Settings - Change preferences
-   - ℹ️ Help - Get help
+5. **WebApp Command**: Use `/webapp` to get direct access to the WebApp button
 
 #### Admin Bot
 
@@ -298,6 +301,7 @@ This project is licensed under the MIT License.
 #### Возможности пользовательского бота:
 - 🌐 **Билингвальный интерфейс**: Полная поддержка русского и узбекского языков
 - 🌍 **Поддержка 4 стран**: Узбекистан, Россия, Казахстан, Киргизия
+- 🌐 **Интеграция с веб-приложением**: Кнопка в основном меню открывает Web App прямо в Telegram
 - 📚 **Иерархические категории**: 4-уровневая система (Dirassa/Al-Azhar → Гражданство → Этап → Контент)
 - 🏢 **Заказ услуг**: Запрос или предложение услуг (репетиторство, жильё, курьер и др.)
 - 🚚 **Система курьеров Каира**: Станьте курьером и зарабатывайте на доставке
@@ -370,6 +374,7 @@ LOG_FILE=bot.log
 WEBAPP_HOST=0.0.0.0
 WEBAPP_PORT=8000
 WEBAPP_PUBLIC_URL=http://localhost:8000
+WEBAPP_URL=https://ваш-домен.com/webapp  # Публичный HTTPS URL для кнопки Web App
 WEBAPP_CORS_ORIGINS=    # разрешенные источники через запятую (необязательно)
 ```
 
@@ -390,13 +395,14 @@ WEBAPP_CORS_ORIGINS=    # разрешенные источники через �
 2. **Выбор языка**: Русский или Узбекский
 3. **Выбор гражданства**: UZ, RU, KZ или KG
 4. **Главное меню**:
-   - 📚 Категории - Информация об Al-Azhar/Dirassa
-   - 🏢 Услуги - Запрос или предложение услуг
-   - 🔍 Поиск - Найти контент
-   - 📞 Написать админу - Отправить сообщение
-   - 🚚 Стать курьером - Регистрация курьером в Каире
+   - 🌍 Путник - Открыть веб-приложение
+   - 📄 Документы - Информация по гражданству
+   - 🚚 Доставка - Услуги доставки
+   - 🔔 Потеря - Сообщить о потерях
+   - 🚨 Полиция - Алерты о безопасности
+   - 👨‍💼 Написать админу - Отправить сообщение
    - ⚙️ Настройки - Изменить предпочтения
-   - ℹ️ Справка - Получить помощь
+5. **Команда WebApp**: Используйте `/webapp` для прямого доступа к веб-приложению
 
 #### Админский бот
 

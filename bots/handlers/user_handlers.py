@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.context import FSMContext
 from aiogram import Dispatcher
 import asyncio
@@ -16,7 +16,6 @@ from services.shurta_service import ShurtaService
 from services.user_message_service import UserMessageService
 from services.statistics_service import StatisticsService
 from utils.logger import logger
-import asyncio
 from config import settings
 
 router = Router()
@@ -153,8 +152,15 @@ def get_language_keyboard():
 
 def get_main_menu_keyboard(lang: str):
     """Get main menu keyboard"""
+    webapp_url = settings.webapp_url or settings.webapp_public_url
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
+            [
+                KeyboardButton(
+                    text=t("menu_webapp", lang),
+                    web_app=WebAppInfo(url=webapp_url)
+                )
+            ],
             [KeyboardButton(text=t("menu_documents", lang))],
             [KeyboardButton(text=t("menu_delivery", lang))],
             [KeyboardButton(text=t("menu_notifications", lang))],
@@ -209,6 +215,39 @@ async def cmd_start(message: Message, state: FSMContext):
                 t("main_menu", user.language),
                 reply_markup=get_main_menu_keyboard(user.language)
             )
+            
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "WEBAPP_OPEN",
+                {"source": "main_menu", "url": settings.webapp_url or settings.webapp_public_url}
+            )
+
+
+@router.message(Command("webapp"))
+async def cmd_webapp(message: Message):
+    """Provide direct access to the WebApp button"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, message.from_user.id)
+        lang = user.language if user else "RU"
+        
+        if user and user.is_banned:
+            await message.answer(t("banned", lang))
+            return
+        
+        webapp_text = f"{t('webapp_title', lang)}\n\n{t('webapp_description', lang)}"
+        await message.answer(
+            webapp_text,
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        
+        if user:
+            await StatisticsService.track_activity(
+                session,
+                user.id,
+                "WEBAPP_OPEN",
+                {"source": "command", "url": settings.webapp_url or settings.webapp_public_url}
+            )
 
 
 @router.callback_query(F.data.startswith("lang_"))
@@ -224,12 +263,20 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
             first_name=callback.from_user.first_name,
             language=lang
         )
+        
+        await callback.message.edit_text(t("language_selected", lang))
+        await callback.message.answer(
+            t("main_menu", lang),
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        
+        await StatisticsService.track_activity(
+            session,
+            user.id,
+            "WEBAPP_OPEN",
+            {"source": "language_selection", "url": settings.webapp_url or settings.webapp_public_url}
+        )
     
-    await callback.message.edit_text(t("language_selected", lang))
-    await callback.message.answer(
-        t("main_menu", lang),
-        reply_markup=get_main_menu_keyboard(lang)
-    )
     await state.clear()
     await callback.answer()
 
@@ -359,6 +406,13 @@ async def back_to_main(callback: CallbackQuery):
         await callback.message.answer(
             t("main_menu", user.language),
             reply_markup=get_main_menu_keyboard(user.language)
+        )
+        
+        await StatisticsService.track_activity(
+            session,
+            user.id,
+            "WEBAPP_OPEN",
+            {"source": "back_to_main", "url": settings.webapp_url or settings.webapp_public_url}
         )
     await callback.answer()
 
