@@ -136,20 +136,30 @@ def get_language_keyboard():
 def get_main_menu_keyboard(lang: str):
     """Get main menu keyboard with WebApp button"""
     webapp_url = settings.webapp_url or settings.webapp_public_url
+    
+    # Build keyboard rows
+    keyboard_rows = []
+    
+    # Only add WebApp button if URL is HTTPS (Telegram requirement)
+    if webapp_url and webapp_url.startswith("https://"):
+        keyboard_rows.append([
+            KeyboardButton(
+                text=t("menu_webapp", lang),
+                web_app=WebAppInfo(url=webapp_url)
+            )
+        ])
+    
+    # Add other menu buttons
+    keyboard_rows.extend([
+        [KeyboardButton(text=t("menu_documents", lang))],
+        [KeyboardButton(text=t("menu_delivery", lang))],
+        [KeyboardButton(text=t("alert_menu_title", lang))],  # Alert creation
+        [KeyboardButton(text=t("menu_admin_contact", lang))],
+        [KeyboardButton(text=t("menu_settings", lang))]
+    ])
+    
     keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(
-                    text=t("menu_webapp", lang),
-                    web_app=WebAppInfo(url=webapp_url)
-                )
-            ],
-            [KeyboardButton(text=t("menu_documents", lang))],
-            [KeyboardButton(text=t("menu_delivery", lang))],
-            [KeyboardButton(text=t("alert_menu_title", lang))],  # Alert creation
-            [KeyboardButton(text=t("menu_admin_contact", lang))],
-            [KeyboardButton(text=t("menu_settings", lang))]
-        ],
+        keyboard=keyboard_rows,
         resize_keyboard=True
     )
     return keyboard
@@ -203,6 +213,9 @@ async def cmd_start(message: Message, state: FSMContext):
                 await message.answer(t("banned", user.language))
                 logger.info(f"[cmd_start] 🚫 Заблокированный пользователь {message.from_user.id}")
                 return
+            
+            # Ensure preferences are present (handles legacy users)
+            await AlertService.ensure_user_alert_preferences(session, user.id)
             
             await message.answer(
                 t("main_menu", user.language),
@@ -258,6 +271,9 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
             first_name=callback.from_user.first_name,
             language=lang
         )
+        
+        # Ensure user has alert preferences with defaults
+        await AlertService.ensure_user_alert_preferences(session, user.id)
         
         await callback.message.edit_text(t("language_selected", lang))
         await callback.message.answer(

@@ -5,6 +5,7 @@ Framework: aiogram 3.x
 """
 
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
@@ -74,7 +75,7 @@ def get_category_management_keyboard(categories: list, include_add_button: bool 
         
         # Кнопка редактирования edit button
         edit_button = InlineKeyboardButton(
-            text="✏️",
+            text="✏️ Edit",
             callback_data=f"admin_cat_edit_{category.id}"
         )
         
@@ -151,7 +152,14 @@ async def toggle_category(callback: CallbackQuery, state: FSMContext):
             categories = await CategoryService.get_root_categories(session, active_only=False)
             keyboard = get_category_management_keyboard(categories)
             
-            await callback.message.edit_reply_markup(reply_markup=keyboard)
+            try:
+                await callback.message.edit_reply_markup(reply_markup=keyboard)
+            except TelegramBadRequest as e:
+                # If message is not modified (keyboard is the same), just ignore
+                if "message is not modified" in str(e):
+                    logger.info(f"[admin_cat_toggle] ⚠️ Клавиатура не изменилась, пропускаем обновление")
+                else:
+                    raise
             
         logger.info(f"[admin_cat_toggle] ✅ Категория {category_id} переключена: {status}")
     except Exception as e:

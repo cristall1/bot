@@ -267,11 +267,22 @@ class ExportService:
         """Export entire database to SQLite dump, return file path"""
         try:
             # Extract database path from URL
-            if "sqlite:///" in db_url:
-                db_path = db_url.replace("sqlite:///", "")
+            # Support formats: sqlite:///path, sqlite+aiosqlite:///path
+            if "sqlite" in db_url.lower():
+                # Remove protocol prefixes
+                db_path = db_url.split("///")[-1]
+                # Handle relative paths like ./bot_database.db
+                if db_path.startswith("./"):
+                    db_path = db_path[2:]
+                db_path = os.path.abspath(db_path)
             else:
                 logger.error("❌ [exporter] Экспорт SQLite поддерживается только для SQLite баз данных")
                 raise ValueError("SQLite export only supported for SQLite databases")
+            
+            # Verify database file exists
+            if not os.path.exists(db_path):
+                logger.error(f"❌ [exporter] Файл базы данных не найден: {db_path}")
+                raise FileNotFoundError(f"Database file not found: {db_path}")
             
             # Create temporary dump file
             temp_dir = tempfile.gettempdir()
