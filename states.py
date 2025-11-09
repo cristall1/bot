@@ -212,6 +212,24 @@ class AdminStates(StatesGroup):
     settings_menu = State()
     toggle_settings = State()
     
+    # Alert moderation (unified 11 types)
+    alert_moderation_menu = State()
+    alert_type_filter = State()
+    alert_pending_list = State()
+    alert_detail_view = State()
+    alert_rejection_reason = State()
+    alert_broadcast_confirm = State()
+    
+    # Export
+    export_menu = State()
+    export_type_selection = State()
+    export_format_selection = State()
+    export_filter_selection = State()
+    
+    # Statistics
+    statistics_menu = State()
+    statistics_detail = State()
+    
     # Legacy states for compatibility
     viewing_propaja_item = State()
     viewing_shurta_item = State()

@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
 from database import Base
@@ -28,6 +28,9 @@ class User(Base):
     deliveries_assigned = relationship("Delivery", foreign_keys="Delivery.courier_id", back_populates="courier")
     notifications_created = relationship("Notification", back_populates="creator")
     shurta_alerts = relationship("ShurtaAlert", back_populates="creator")
+    alerts_created = relationship("Alert", foreign_keys="Alert.creator_id", back_populates="creator")
+    alerts_moderated = relationship("Alert", foreign_keys="Alert.moderator_id", back_populates="moderator")
+    alert_preferences = relationship("UserAlertPreference", back_populates="user", cascade="all, delete-orphan")
     user_messages = relationship("UserMessage", back_populates="user")
     courier_info = relationship("Courier", back_populates="user", uselist=False)
     activities = relationship("UserActivity", back_populates="user")
@@ -228,6 +231,21 @@ class Courier(Base):
     user = relationship("User", back_populates="courier_info")
 
 
+class AlertType(enum.Enum):
+    """11 alert types for the Al-Azhar community"""
+    PROPAJA_ODAM = "PROPAJA_ODAM"  # Lost person
+    PROPAJA_NARSA = "PROPAJA_NARSA"  # Lost item
+    SHURTA = "SHURTA"  # Police alert
+    DOSTAVKA = "DOSTAVKA"  # Delivery order
+    ISH_TAKLIFNOMASI = "ISH_TAKLIFNOMASI"  # Job offer
+    UY_UYICHA = "UY_UYICHA"  # Housing/rental
+    TADBIR = "TADBIR"  # Event announcement
+    FAVQULODDA = "FAVQULODDA"  # Emergency
+    SOTISH = "SOTISH"  # Sale/marketplace
+    XIZMAT = "XIZMAT"  # Service offering
+    ELON = "ELON"  # General announcement
+
+
 class SystemSetting(Base):
     """System settings for toggling features"""
     __tablename__ = "system_settings"
@@ -239,6 +257,74 @@ class SystemSetting(Base):
     value = Column(Boolean, default=True)
     last_modified_by = Column(Integer, nullable=True)
     modified_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Alert(Base):
+    """Unified alert system for all 11 alert types"""
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alert_type = Column(SQLEnum(AlertType), nullable=False, index=True)
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Content fields
+    title = Column(String(255), nullable=True)  # Name for person, what for item, job title, etc
+    description = Column(Text, nullable=False)
+    photo_file_id = Column(String(500), nullable=True)
+    additional_files = Column(JSON, nullable=True)  # Additional file IDs if needed
+    
+    # Location fields
+    location_type = Column(String(20), nullable=True)  # ADDRESS, GEO, MAPS
+    address_text = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)
+    maps_url = Column(String(500), nullable=True)
+    
+    # Contact
+    phone = Column(String(50), nullable=True)
+    contact_info = Column(JSON, nullable=True)  # Additional contact methods
+    
+    # Moderation fields
+    is_approved = Column(Boolean, default=False)
+    is_moderated = Column(Boolean, default=False)
+    moderator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    moderated_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    
+    # Targeting filters (for broadcasts after approval)
+    target_languages = Column(JSON, nullable=True)  # ["RU", "UZ"] or null for all
+    target_citizenships = Column(JSON, nullable=True)  # ["UZ", "RU", "KZ", "KG"] or null
+    target_couriers_only = Column(Boolean, default=False)
+    
+    # Statistics
+    broadcast_sent = Column(Boolean, default=False)
+    broadcast_count = Column(Integer, default=0)  # Number of users reached
+    broadcast_at = Column(DateTime, nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=True)  # Auto-expiration (48h for some types)
+    
+    # Relationships
+    creator = relationship("User", foreign_keys=[creator_id], back_populates="alerts_created")
+    moderator = relationship("User", foreign_keys=[moderator_id], back_populates="alerts_moderated")
+
+
+class UserAlertPreference(Base):
+    """User preferences for receiving specific alert types"""
+    __tablename__ = "user_alert_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    alert_type = Column(SQLEnum(AlertType), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="alert_preferences")
 
 
 class AdminLog(Base):
@@ -294,13 +380,19 @@ class Category(Base):
     is_active = Column(Boolean, default=True)  # on/off toggle
     order_index = Column(Integer, default=0)
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # For nested categories
-    content_type = Column(String(20), default="TEXT")  # TEXT, PHOTO, AUDIO, PDF, LINK
+    content_type = Column(String(20), default="TEXT")  # TEXT, PHOTO, AUDIO, PDF, LINK, LOCATION, BUTTON_COLLECTION
     text_content_ru = Column(Text, nullable=True)
     text_content_uz = Column(Text, nullable=True)
     photo_file_id = Column(String(500), nullable=True)
     audio_file_id = Column(String(500), nullable=True)
     pdf_file_id = Column(String(500), nullable=True)
     link_url = Column(String(500), nullable=True)
+    location_type = Column(String(20), nullable=True)  # ADDRESS, GEO, MAPS
+    location_address = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)
+    maps_url = Column(String(500), nullable=True)
     button_type = Column(String(20), nullable=True)  # INLINE, KEYBOARD, NONE
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

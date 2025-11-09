@@ -45,14 +45,14 @@ def get_admin_main_menu():
     """Главное меню администратора (Admin main menu)"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📁 Управление категориями", callback_data="admin_category_menu")],
+        [InlineKeyboardButton(text="🚨 Модерация алертов", callback_data="admin_alert_menu")],
         [InlineKeyboardButton(text="📚 Управление документами", callback_data="admin_doc_menu")],
         [InlineKeyboardButton(text="🚚 Управление доставкой", callback_data="admin_del_menu")],
-        [InlineKeyboardButton(text="🔔 Управление потерями", callback_data="admin_prop_menu")],
-        [InlineKeyboardButton(text="🚨 Управление Полицией", callback_data="admin_shurta_menu")],
         [InlineKeyboardButton(text="👥 Управление пользователями", callback_data="admin_user_menu")],
         [InlineKeyboardButton(text="💬 Сообщения от пользователей", callback_data="admin_msg_menu")],
         [InlineKeyboardButton(text="📢 Система рассылки", callback_data="admin_bc_menu")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats_menu")],
+        [InlineKeyboardButton(text="📤 Экспорт данных", callback_data="admin_export_menu")],
         [InlineKeyboardButton(text="⚙️ Настройки системы", callback_data="admin_settings_menu")],
     ])
     return keyboard
