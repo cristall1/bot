@@ -286,12 +286,33 @@ WEBAPP_URL=https://your-domain.com/webapp        # Public HTTPS URL for WebApp b
 # Optional WebApp Settings
 WEBAPP_CORS_ORIGINS=https://example.com          # Comma-separated CORS origins (if needed)
 WEBAPP_DEBUG_SKIP_AUTH=false                     # Skip auth for local testing (NEVER in production)
-WEBAPP_DEBUG_USER_ID=12345                       # User ID for debug mode
+WEBAPP_DEBUG_USER_ID=999999999                   # User ID for debug mode
 WEBAPP_UPLOAD_DIR=webapp/uploads                 # Directory for uploaded files
 WEBAPP_MAX_UPLOAD_SIZE=10485760                  # Max file size in bytes (default: 10MB)
 ```
 
 **Important**: `WEBAPP_URL` must be HTTPS for Telegram Web Apps to work in production. Use services like ngrok for local development or deploy to a server with HTTPS.
+
+#### Local Development: Skip Telegram Authentication
+
+You can open the Web App directly in a browser during development without Telegram:
+
+1. Update your `.env` file:
+
+   ```env
+   WEBAPP_DEBUG_SKIP_AUTH=true
+   WEBAPP_DEBUG_USER_ID=999999999
+   ```
+
+2. Run the application as usual:
+
+   ```bash
+   python main.py
+   ```
+
+3. Navigate to `http://localhost:8000/webapp/` in your browser.
+
+The backend will automatically create or reuse a debug admin user (`telegram_id=999999999`) and log that debug mode is active. ⚠️ Remember to set `WEBAPP_DEBUG_SKIP_AUTH=false` (or remove it) before deploying to production.
 
 #### Running the Web App
 
@@ -593,12 +614,33 @@ WEBAPP_URL=https://ваш-домен.com/webapp          # Публичная HT
 # Дополнительные настройки
 WEBAPP_CORS_ORIGINS=https://example.com          # Разрешённые origin'ы (опционально)
 WEBAPP_DEBUG_SKIP_AUTH=false                     # Пропуск авторизации (только для локалки)
-WEBAPP_DEBUG_USER_ID=12345                       # Пользователь по умолчанию в debug-режиме
+WEBAPP_DEBUG_USER_ID=999999999                   # Пользователь по умолчанию в debug-режиме
 WEBAPP_UPLOAD_DIR=webapp/uploads                 # Каталог для загруженных файлов
 WEBAPP_MAX_UPLOAD_SIZE=10485760                  # Максимальный размер файла (10 МБ)
 ```
 
 > ⚠️ `WEBAPP_URL` в продакшене обязательно должен указывать на HTTPS — Telegram Web App не работает по HTTP.
+
+#### Локальная разработка: пропуск авторизации Telegram
+
+Для работы с Web App без запуска через Telegram:
+
+1. Измените `.env`:
+
+   ```env
+   WEBAPP_DEBUG_SKIP_AUTH=true
+   WEBAPP_DEBUG_USER_ID=999999999
+   ```
+
+2. Запустите приложение:
+
+   ```bash
+   python main.py
+   ```
+
+3. Откройте в браузере `http://localhost:8000/webapp/`
+
+Бэкенд автоматически создаст тестового пользователя-админа (`telegram_id=999999999`), и будет логировать активность debug-режима. ⚠️ Не забудьте вернуть `WEBAPP_DEBUG_SKIP_AUTH=false` перед деплоем в продакшен!
 
 #### Запуск Web App
 

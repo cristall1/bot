@@ -157,20 +157,18 @@ async def get_current_user(
         logger.warning("⚠️ ВНИМАНИЕ: Используется отладочный режим без проверки аутентификации!")
         
         # Get debug user ID from settings or use default
-        debug_telegram_id = getattr(settings, 'webapp_debug_user_id', 5912983856)
+        debug_telegram_id = getattr(settings, 'webapp_debug_user_id', 999999999)
         
-        user = await UserService.get_user(session, debug_telegram_id)
-        if not user:
-            # Create debug user
-            user = await UserService.create_or_update_user(
-                session=session,
-                telegram_id=debug_telegram_id,
-                username="debug_user",
-                first_name="Debug User",
-                language="RU"
-            )
-            logger.info(f"Создан отладочный пользователь: {debug_telegram_id}")
+        # Get or create debug user with admin rights
+        user = await UserService.get_or_create_debug_user(
+            session=session,
+            telegram_id=debug_telegram_id,
+            username="debug_user",
+            first_name="Debug User",
+            language="RU"
+        )
         
+        logger.info(f"✅ Отладочный режим: пользователь {debug_telegram_id} (админ: {user.is_admin})")
         return user
     
     # Try to get initData from header first, then from query params
