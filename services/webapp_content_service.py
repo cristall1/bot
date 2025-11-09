@@ -2,6 +2,8 @@
 Сервис управления контентом Web App - Web App Content Management Service
 """
 
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -400,7 +402,12 @@ class WebAppContentService:
         storage_path: str = None,
         mime_type: str = None,
         file_size: int = None,
-        uploaded_by: int = None
+        uploaded_by: int = None,
+        original_name: str = None,
+        description: str = None,
+        tag: str = None,
+        width: int = None,
+        height: int = None
     ) -> WebAppFile:
         """
         Создать запись о файле
@@ -415,7 +422,12 @@ class WebAppContentService:
                 storage_path=storage_path,
                 mime_type=mime_type,
                 file_size=file_size,
-                uploaded_by=uploaded_by
+                uploaded_by=uploaded_by,
+                original_name=original_name,
+                description=description,
+                tag=tag,
+                width=width,
+                height=height
             )
             
             session.add(file_record)
@@ -470,3 +482,39 @@ class WebAppContentService:
             return file.storage_path
         
         return None
+    
+    @staticmethod
+    async def delete_file(
+        session: AsyncSession,
+        file_id: int,
+        delete_physical: bool = True
+    ) -> bool:
+        """
+        Удалить файл из базы данных и с диска
+        Delete file from database and disk
+        """
+        try:
+            file_record = await WebAppContentService.get_file(session, file_id)
+            if not file_record:
+                logger.warning(f"Файл Web App {file_id} не найден для удаления")
+                return False
+            
+            if delete_physical and file_record.storage_path:
+                try:
+                    from webapp.storage import resolve_physical_path
+                    physical_path = resolve_physical_path(file_record.storage_path)
+                    if physical_path and physical_path.exists():
+                        await asyncio.to_thread(physical_path.unlink)
+                        logger.info(f"✅ Физический файл удалён: {physical_path}")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка удаления физического файла: {str(e)}")
+            
+            await session.delete(file_record)
+            await session.commit()
+            
+            logger.info(f"✅ Файл Web App {file_id} удалён из базы данных")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Ошибка удаления файла Web App: {str(e)}", exc_info=True)
+            await session.rollback()
+            raise

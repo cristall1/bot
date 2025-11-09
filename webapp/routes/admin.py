@@ -3,13 +3,19 @@ Admin API Routes for Web App Content Management
 Provides CRUD operations for categories and items (admin-only)
 """
 
+import asyncio
+import mimetypes
+import uuid
+from pathlib import Path
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from config import settings
 from models import (
     User,
     WebAppCategory,
@@ -26,6 +32,8 @@ from webapp.routes.categories import (
     build_file_url,
     serialize_category,
 )
+from webapp.storage import build_storage_path, get_upload_directory
+
 
 router = APIRouter(prefix="/webapp", tags=["webapp-admin"])
 
@@ -457,7 +465,12 @@ async def create_item(
                 file_type=item.file.file_type,
                 file_url=build_file_url(item.file),
                 mime_type=item.file.mime_type,
-                file_size=item.file.file_size
+                file_size=item.file.file_size,
+                original_name=item.file.original_name,
+                description=item.file.description,
+                tag=item.file.tag,
+                width=item.file.width,
+                height=item.file.height
             )
         
         response = WebAppCategoryItemOut(
@@ -579,7 +592,12 @@ async def update_item(
                 file_type=updated_item.file.file_type,
                 file_url=build_file_url(updated_item.file),
                 mime_type=updated_item.file.mime_type,
-                file_size=updated_item.file.file_size
+                file_size=updated_item.file.file_size,
+                original_name=updated_item.file.original_name,
+                description=updated_item.file.description,
+                tag=updated_item.file.tag,
+                width=updated_item.file.width,
+                height=updated_item.file.height
             )
         
         response = WebAppCategoryItemOut(
@@ -720,3 +738,238 @@ async def reorder_items(
         logger.error(f"❌ Ошибка переупорядочивания элементов категории {category_id}: {str(e)}", exc_info=True)
         await session.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка переупорядочивания элементов: {str(e)}")
+
+
+# File Upload Endpoint
+
+ALLOWED_FILE_TYPES = {
+    "IMAGE": {
+        "extensions": {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"},
+        "mime_types": {
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/svg+xml",
+        },
+        "mime_prefixes": {"image/"},
+    },
+    "DOCUMENT": {
+        "extensions": {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt"},
+        "mime_types": {
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+        },
+        "mime_prefixes": set(),
+    },
+    "VIDEO": {
+        "extensions": {".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".webm", ".mkv"},
+        "mime_types": {
+            "video/mp4",
+            "video/mpeg",
+            "video/quicktime",
+            "video/x-msvideo",
+            "video/webm",
+            "video/x-matroska",
+        },
+        "mime_prefixes": {"video/"},
+    },
+}
+
+
+def validate_file_type(content_type: str, filename: str) -> str:
+    """
+    Validate file type based on MIME type and extension
+    Returns file_type (IMAGE, DOCUMENT, VIDEO)
+    """
+    normalized_mime = (content_type or "").lower()
+    file_ext = Path(filename).suffix.lower()
+
+    for file_type, config in ALLOWED_FILE_TYPES.items():
+        if file_ext not in config["extensions"]:
+            continue
+
+        if not normalized_mime:
+            return file_type
+
+        if normalized_mime in config["mime_types"]:
+            return file_type
+
+        if any(normalized_mime.startswith(prefix) for prefix in config["mime_prefixes"]):
+            return file_type
+
+    allowed_extensions = sorted({ext for cfg in ALLOWED_FILE_TYPES.values() for ext in cfg["extensions"]})
+    raise ValueError(
+        "Неподдерживаемый тип файла. Допустимые расширения: "
+        + ", ".join(allowed_extensions)
+    )
+
+
+async def get_image_dimensions(file_path: Path) -> tuple[Optional[int], Optional[int]]:
+    """
+    Get image dimensions using Pillow
+    Returns (width, height) or (None, None) if not an image or error
+    """
+    try:
+        from PIL import Image
+
+        def _measure() -> tuple[int, int]:
+            with Image.open(file_path) as img:
+                return img.width, img.height
+
+        return await asyncio.to_thread(_measure)
+    except Exception as e:
+        logger.warning(f"Не удалось получить размеры изображения: {str(e)}")
+        return None, None
+
+
+@router.post("/upload", response_model=WebAppFileOut)
+async def upload_file(
+    file: UploadFile = File(...),
+    description: Optional[str] = Form(None),
+    tag: Optional[str] = Form(None),
+    user: User = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Загрузить файл (только администратор)
+    Upload file (admin only)
+    
+    Form data:
+    - file: Файл для загрузки (обязательно)
+    - description: Описание файла (опционально)
+    - tag: Тег файла (опционально)
+    
+    Accepts images (jpg, png, gif, webp, svg), documents (pdf, doc, docx, xls, xlsx),
+    and videos (mp4, mpeg, mov, avi, webm).
+    
+    Returns file metadata including file_id and file_url.
+    """
+    try:
+        if not file.filename:
+            logger.error("❌ Отсутствует имя файла")
+            raise HTTPException(status_code=400, detail="Отсутствует имя файла")
+        
+        content_type = file.content_type or mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
+        logger.info(f"Начало загрузки файла: {file.filename}, MIME: {content_type}")
+        
+        try:
+            file_type = validate_file_type(content_type, file.filename)
+        except ValueError as e:
+            logger.error(f"❌ {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        if file_size > settings.webapp_max_upload_size:
+            logger.error(f"❌ Файл слишком большой: {file_size} байт (максимум {settings.webapp_max_upload_size})")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Файл слишком большой. Максимальный размер: {settings.webapp_max_upload_size // (1024 * 1024)} МБ"
+            )
+        
+        file_ext = Path(file.filename).suffix.lower()
+        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+        
+        upload_dir = get_upload_directory()
+        physical_path = upload_dir / unique_filename
+        
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, physical_path.write_bytes, file_content)
+        
+        logger.info(f"✅ Файл сохранён на диск: {physical_path}")
+        
+        width = None
+        height = None
+        if file_type == "IMAGE":
+            width, height = await get_image_dimensions(physical_path)
+            if width and height:
+                logger.info(f"📐 Размеры изображения: {width}x{height}")
+        
+        storage_path = build_storage_path(unique_filename)
+        
+        file_record = await WebAppContentService.create_file(
+            session=session,
+            file_type=file_type,
+            storage_path=storage_path,
+            mime_type=content_type,
+            file_size=file_size,
+            uploaded_by=user.id,
+            original_name=file.filename,
+            description=description,
+            tag=tag,
+            width=width,
+            height=height
+        )
+        
+        file_url = build_file_url(file_record)
+        
+        response = WebAppFileOut(
+            id=file_record.id,
+            file_type=file_record.file_type,
+            file_url=file_url,
+            mime_type=file_record.mime_type,
+            file_size=file_record.file_size,
+            original_name=file_record.original_name,
+            description=file_record.description,
+            tag=file_record.tag,
+            width=file_record.width,
+            height=file_record.height
+        )
+        
+        logger.info(
+            f"✅ Администратор {user.telegram_id} загрузил файл {file_record.id}: "
+            f"{file.filename} ({file_size} байт, {file_type})"
+        )
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Ошибка загрузки файла: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки файла: {str(e)}")
+
+
+@router.delete("/file/{file_id}")
+async def delete_file(
+    file_id: int,
+    user: User = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Удалить файл (только администратор)
+    Delete file (admin only)
+    
+    Deletes both the database record and physical file from disk.
+    """
+    try:
+        file_record = await WebAppContentService.get_file(session, file_id)
+        if not file_record:
+            logger.warning(f"❌ Файл {file_id} не найден")
+            raise HTTPException(status_code=404, detail="Файл не найден")
+        
+        success = await WebAppContentService.delete_file(
+            session=session,
+            file_id=file_id,
+            delete_physical=True
+        )
+        
+        if success:
+            logger.info(f"✅ Администратор {user.telegram_id} удалил файл {file_id}")
+            return {"success": True, "message": "Файл удалён"}
+        else:
+            raise HTTPException(status_code=500, detail="Ошибка удаления файла")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Ошибка удаления файла {file_id}: {str(e)}", exc_info=True)
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления файла: {str(e)}")

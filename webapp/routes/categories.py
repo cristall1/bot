@@ -23,6 +23,11 @@ class WebAppFileOut(BaseModel):
     file_url: Optional[str] = None
     mime_type: Optional[str] = None
     file_size: Optional[int] = None
+    original_name: Optional[str] = None
+    description: Optional[str] = None
+    tag: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -83,7 +88,7 @@ def build_file_url(file_record) -> Optional[str]:
         storage_path = file_record.storage_path.lstrip("/")
         base_url = settings.webapp_public_url.rstrip("/")
 
-        if storage_path.startswith("webapp/static/"):
+        if storage_path.startswith("webapp/static/") or storage_path.startswith("webapp/uploads/"):
             return f"{base_url}/{storage_path}"
 
         return f"{base_url}/webapp/static/{storage_path}"
@@ -112,7 +117,12 @@ def serialize_category(
                 file_type=item.file.file_type,
                 file_url=build_file_url(item.file),
                 mime_type=item.file.mime_type,
-                file_size=item.file.file_size
+                file_size=item.file.file_size,
+                original_name=item.file.original_name,
+                description=item.file.description,
+                tag=item.file.tag,
+                width=item.file.width,
+                height=item.file.height
             )
 
         serialized_items.append(
