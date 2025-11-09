@@ -50,6 +50,7 @@ class WebAppCategoryOut(BaseModel):
     description: Optional[str] = None
     cover_url: Optional[str] = None
     order_index: int
+    is_active: bool
     items_count: int = 0
 
     class Config:
@@ -63,6 +64,7 @@ class WebAppCategoryDetailOut(BaseModel):
     description: Optional[str] = None
     cover_url: Optional[str] = None
     order_index: int
+    is_active: bool
     items: List[WebAppCategoryItemOut]
 
     class Config:
@@ -136,6 +138,7 @@ def serialize_category(
             description=category.description,
             cover_url=cover_url,
             order_index=category.order_index,
+            is_active=category.is_active,
             items=ordered_items
         )
 
@@ -147,6 +150,7 @@ def serialize_category(
         description=category.description,
         cover_url=cover_url,
         order_index=category.order_index,
+        is_active=category.is_active,
         items_count=items_count
     )
 
