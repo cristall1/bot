@@ -46,6 +46,9 @@ This is a complete Telegram bot system consisting of two bots:
 - **SQLAlchemy**: 2.0.27 (ORM)
 - **aiosqlite**: 0.19.0 (Async SQLite)
 - **Pydantic**: 2.6.1 (Settings management)
+- **FastAPI**: 0.109.0 (ASGI web framework for Telegram Web App)
+- **Uvicorn**: 0.27.0 (ASGI server)
+- **Jinja2**: 3.1.3 (Templating engine for web views)
 - **Telegraph**: 2.2.0 (Long content articles)
 
 ### 📁 Project Structure
@@ -83,6 +86,13 @@ bot/
 │   ├── helpers.py
 │   └── keyboard_builder.py
 │
+├── webapp/                            # FastAPI web application
+│   ├── server.py                     # FastAPI app factory
+│   ├── routes/                       # HTTP endpoints
+│   │   └── __init__.py              # Health check endpoint
+│   ├── static/                       # Static assets (CSS, JS, images)
+│   └── templates/                    # Jinja2 HTML templates
+│
 ├── data/                              # Seed data
 │   ├── result.json                   # Telegram chat export
 │   ├── categories_seed.json
@@ -119,7 +129,7 @@ cd bot
 
 2. **Install dependencies**:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt  # includes FastAPI, Uvicorn, python-multipart, Jinja2
 ```
 
 3. **Configure environment**:
@@ -144,6 +154,12 @@ DATABASE_URL=sqlite+aiosqlite:///./bot_database.db
 ADMIN_IDS=123456789,987654321
 LOG_LEVEL=INFO
 LOG_FILE=bot.log
+
+# WebApp Settings (for Telegram Web App)
+WEBAPP_HOST=0.0.0.0
+WEBAPP_PORT=8000
+WEBAPP_PUBLIC_URL=http://localhost:8000
+WEBAPP_CORS_ORIGINS=    # comma-separated allowed origins (optional)
 ```
 
 **Getting Bot Tokens:**
@@ -309,6 +325,9 @@ This project is licensed under the MIT License.
 - **SQLAlchemy**: 2.0.27 (ORM)
 - **aiosqlite**: 0.19.0 (Асинхронный SQLite)
 - **Pydantic**: 2.6.1 (Управление настройками)
+- **FastAPI**: 0.109.0 (веб-фреймворк для Telegram Web App)
+- **Uvicorn**: 0.27.0 (ASGI-сервер)
+- **Jinja2**: 3.1.3 (шаблонизатор для веб-интерфейсов)
 - **Telegraph**: 2.2.0 (Длинные статьи)
 
 ### 🚀 Установка
@@ -321,7 +340,7 @@ cd bot
 
 2. **Установить зависимости**:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt  # включает FastAPI, Uvicorn, python-multipart, Jinja2
 ```
 
 3. **Настроить окружение**:
@@ -346,6 +365,12 @@ DATABASE_URL=sqlite+aiosqlite:///./bot_database.db
 ADMIN_IDS=123456789,987654321
 LOG_LEVEL=INFO
 LOG_FILE=bot.log
+
+# Настройки веб-приложения (для Telegram Web App)
+WEBAPP_HOST=0.0.0.0
+WEBAPP_PORT=8000
+WEBAPP_PUBLIC_URL=http://localhost:8000
+WEBAPP_CORS_ORIGINS=    # разрешенные источники через запятую (необязательно)
 ```
 
 **Получение токенов ботов:**

@@ -21,12 +21,22 @@ class Settings(BaseSettings):
     telegraph_token: str = Field(default="", alias="TELEGRAPH_TOKEN")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="bot.log", alias="LOG_FILE")
+    webapp_host: str = Field(default="0.0.0.0", alias="WEBAPP_HOST")
+    webapp_port: int = Field(default=8000, alias="WEBAPP_PORT")
+    webapp_public_url: str = Field(default="http://localhost:8000", alias="WEBAPP_PUBLIC_URL")
+    webapp_cors_origins: str = Field(default="", alias="WEBAPP_CORS_ORIGINS")
 
     @property
     def admin_ids_list(self) -> List[int]:
         if not self.admin_ids:
             return []
         return [int(id.strip()) for id in self.admin_ids.split(",") if id.strip()]
+
+    @property
+    def webapp_cors_origins_list(self) -> List[str]:
+        if not self.webapp_cors_origins:
+            return []
+        return [origin.strip() for origin in self.webapp_cors_origins.split(",") if origin.strip()]
 
 
 settings = Settings()
