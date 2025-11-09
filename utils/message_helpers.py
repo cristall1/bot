@@ -74,6 +74,27 @@ async def delete_message_later(
         logger.debug(f"⚠️ Не удалось удалить сообщение {message_id}: {str(e)}")
 
 
+async def delete_message_immediately(
+    bot: Bot,
+    chat_id: int,
+    message_id: int
+):
+    """
+    Delete message immediately (no delay)
+    
+    Args:
+        bot: Bot instance
+        chat_id: Chat ID
+        message_id: Message ID to delete
+    """
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"✅ Сообщение {message_id} удалено немедленно")
+    except Exception as e:
+        # Message may have been already deleted or is too old
+        logger.debug(f"⚠️ Не удалось удалить сообщение {message_id}: {str(e)}")
+
+
 def build_keyboard_2_columns(
     buttons: List[InlineKeyboardButton],
     back_button: Optional[InlineKeyboardButton] = None,

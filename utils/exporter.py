@@ -304,6 +304,199 @@ class ExportService:
             raise
     
     @staticmethod
+    async def export_alerts_txt(
+        session: AsyncSession,
+        alert_type: Optional[AlertType] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> str:
+        """Export alerts to TXT file, return file path"""
+        try:
+            # Query alerts
+            query = select(Alert)
+            
+            if alert_type:
+                query = query.where(Alert.alert_type == alert_type)
+            if start_date:
+                query = query.where(Alert.created_at >= start_date)
+            if end_date:
+                query = query.where(Alert.created_at <= end_date)
+            
+            query = query.order_by(Alert.created_at.desc())
+            
+            result = await session.execute(query)
+            alerts = result.scalars().all()
+            
+            # Create temporary TXT file
+            temp_dir = tempfile.gettempdir()
+            filename = f"alerts_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.txt"
+            filepath = os.path.join(temp_dir, filename)
+            
+            with open(filepath, 'w', encoding='utf-8') as txtfile:
+                txtfile.write("=== ЭКСПОРТ АЛЕРТОВ ===\n")
+                txtfile.write(f"Сгенерирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                txtfile.write(f"Всего алертов: {len(alerts)}\n")
+                txtfile.write("\n" + "="*80 + "\n\n")
+                
+                for alert in alerts:
+                    txtfile.write(f"ID: {alert.id}\n")
+                    txtfile.write(f"Тип: {alert.alert_type.value}\n")
+                    if alert.title:
+                        txtfile.write(f"Заголовок: {alert.title}\n")
+                    txtfile.write(f"Описание: {alert.description}\n")
+                    txtfile.write(f"Создатель ID: {alert.creator_id}\n")
+                    txtfile.write(f"Создан: {alert.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    txtfile.write(f"Одобрен: {'Да' if alert.is_approved else 'Нет'}\n")
+                    if alert.moderator_id:
+                        txtfile.write(f"Модератор ID: {alert.moderator_id}\n")
+                    if alert.moderated_at:
+                        txtfile.write(f"Отмодерирован: {alert.moderated_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    txtfile.write(f"Активен: {'Да' if alert.is_active else 'Нет'}\n")
+                    if alert.phone:
+                        txtfile.write(f"Телефон: {alert.phone}\n")
+                    if alert.address_text:
+                        txtfile.write(f"Адрес: {alert.address_text}\n")
+                    if alert.broadcast_count:
+                        txtfile.write(f"Количество рассылок: {alert.broadcast_count}\n")
+                    if alert.broadcast_at:
+                        txtfile.write(f"Дата рассылки: {alert.broadcast_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    txtfile.write("\n" + "-"*80 + "\n\n")
+                
+                txtfile.write("=== КОНЕЦ ЭКСПОРТА ===\n")
+            
+            logger.info(f"✅ [exporter] Экспортировано {len(alerts)} алертов в TXT: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"❌ [exporter] Ошибка экспорта алертов в TXT: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    async def export_users_txt(
+        session: AsyncSession,
+        language: Optional[str] = None,
+        citizenship: Optional[str] = None,
+        is_courier: Optional[bool] = None
+    ) -> str:
+        """Export users to TXT file, return file path"""
+        try:
+            # Query users
+            query = select(User)
+            
+            if language:
+                query = query.where(User.language == language)
+            if citizenship:
+                query = query.where(User.citizenship == citizenship)
+            if is_courier is not None:
+                query = query.where(User.is_courier == is_courier)
+            
+            query = query.order_by(User.created_at.desc())
+            
+            result = await session.execute(query)
+            users = result.scalars().all()
+            
+            # Create temporary TXT file
+            temp_dir = tempfile.gettempdir()
+            filename = f"users_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.txt"
+            filepath = os.path.join(temp_dir, filename)
+            
+            with open(filepath, 'w', encoding='utf-8') as txtfile:
+                txtfile.write("=== ЭКСПОРТ ПОЛЬЗОВАТЕЛЕЙ ===\n")
+                txtfile.write(f"Сгенерирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                txtfile.write(f"Всего пользователей: {len(users)}\n")
+                txtfile.write("\n" + "="*80 + "\n\n")
+                
+                for user in users:
+                    txtfile.write(f"ID: {user.id}\n")
+                    txtfile.write(f"Telegram ID: {user.telegram_id}\n")
+                    if user.username:
+                        txtfile.write(f"Username: @{user.username}\n")
+                    if user.first_name:
+                        txtfile.write(f"Имя: {user.first_name}\n")
+                    if user.phone:
+                        txtfile.write(f"Телефон: {user.phone}\n")
+                    txtfile.write(f"Язык: {user.language}\n")
+                    if user.citizenship:
+                        txtfile.write(f"Гражданство: {user.citizenship}\n")
+                    txtfile.write(f"Админ: {'Да' if user.is_admin else 'Нет'}\n")
+                    txtfile.write(f"Курьер: {'Да' if user.is_courier else 'Нет'}\n")
+                    txtfile.write(f"Заблокирован: {'Да' if user.is_banned else 'Нет'}\n")
+                    txtfile.write(f"Зарегистрирован: {user.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    if user.last_active:
+                        txtfile.write(f"Последняя активность: {user.last_active.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    txtfile.write("\n" + "-"*80 + "\n\n")
+                
+                txtfile.write("=== КОНЕЦ ЭКСПОРТА ===\n")
+            
+            logger.info(f"✅ [exporter] Экспортировано {len(users)} пользователей в TXT: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"❌ [exporter] Ошибка экспорта пользователей в TXT: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    async def export_deliveries_txt(
+        session: AsyncSession,
+        status: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> str:
+        """Export deliveries to TXT file, return file path"""
+        try:
+            # Query deliveries
+            query = select(Delivery)
+            
+            if status:
+                query = query.where(Delivery.status == status)
+            if start_date:
+                query = query.where(Delivery.created_at >= start_date)
+            if end_date:
+                query = query.where(Delivery.created_at <= end_date)
+            
+            query = query.order_by(Delivery.created_at.desc())
+            
+            result = await session.execute(query)
+            deliveries = result.scalars().all()
+            
+            # Create temporary TXT file
+            temp_dir = tempfile.gettempdir()
+            filename = f"deliveries_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.txt"
+            filepath = os.path.join(temp_dir, filename)
+            
+            with open(filepath, 'w', encoding='utf-8') as txtfile:
+                txtfile.write("=== ЭКСПОРТ ДОСТАВОК ===\n")
+                txtfile.write(f"Сгенерирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                txtfile.write(f"Всего доставок: {len(deliveries)}\n")
+                txtfile.write("\n" + "="*80 + "\n\n")
+                
+                for delivery in deliveries:
+                    txtfile.write(f"ID: {delivery.id}\n")
+                    txtfile.write(f"Описание: {delivery.description}\n")
+                    txtfile.write(f"Создатель ID: {delivery.creator_id}\n")
+                    if delivery.courier_id:
+                        txtfile.write(f"Курьер ID: {delivery.courier_id}\n")
+                    txtfile.write(f"Статус: {delivery.status}\n")
+                    txtfile.write(f"Телефон: {delivery.phone}\n")
+                    if delivery.address_text:
+                        txtfile.write(f"Адрес: {delivery.address_text}\n")
+                    txtfile.write(f"Создан: {delivery.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    if delivery.assigned_at:
+                        txtfile.write(f"Назначен: {delivery.assigned_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    if delivery.completed_at:
+                        txtfile.write(f"Завершен: {delivery.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    txtfile.write("\n" + "-"*80 + "\n\n")
+                
+                txtfile.write("=== КОНЕЦ ЭКСПОРТА ===\n")
+            
+            logger.info(f"✅ [exporter] Экспортировано {len(deliveries)} доставок в TXT: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"❌ [exporter] Ошибка экспорта доставок в TXT: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
     def cleanup_export_file(filepath: str) -> bool:
         """Delete export file after sending"""
         try:

@@ -21,7 +21,7 @@ import asyncio
 
 router = Router()
 
-# Alert type names in Russian
+# Alert type names in Russian (COURIER_NEEDED hidden from UI per ticket)
 ALERT_TYPE_NAMES_RU = {
     AlertType.SHURTA: "🚨 Полиция",
     AlertType.MISSING_PERSON: "👤 Пропал человек",
@@ -33,7 +33,7 @@ ALERT_TYPE_NAMES_RU = {
     AlertType.JOB_POSTING: "💼 Вакансия",
     AlertType.LOST_DOCUMENT: "📄 Потеря документа",
     AlertType.EVENT_ANNOUNCEMENT: "🎉 Мероприятие",
-    AlertType.COURIER_NEEDED: "📦 Нужен курьер"
+    # AlertType.COURIER_NEEDED removed from UI - delivery managed through Delivery section
 }
 
 
@@ -55,6 +55,9 @@ async def show_alert_moderation_menu(callback: CallbackQuery, state: FSMContext)
         
         # Add button for each alert type showing pending count
         for alert_type in AlertType:
+            if alert_type == AlertType.COURIER_NEEDED:
+                # Courier requests managed via Delivery flow - skip from moderation menu
+                continue
             count = pending_counts.get(alert_type.value, 0)
             name = ALERT_TYPE_NAMES_RU.get(alert_type, alert_type.value)
             badge = f" ({count})" if count > 0 else ""
@@ -233,7 +236,7 @@ async def view_alert_detail(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("admin_alert_approve_"))
 async def approve_alert(callback: CallbackQuery, state: FSMContext):
-    """Approve alert and optionally broadcast"""
+    """Approve alert and automatically broadcast to users"""
     try:
         alert_id = int(callback.data.split("_")[-1])
         admin_id = callback.from_user.id
@@ -271,36 +274,199 @@ async def approve_alert(callback: CallbackQuery, state: FSMContext):
                 activity_data={"alert_id": alert_id, "alert_type": alert.alert_type.value}
             )
         
-        await callback.answer("✅ Алерт одобрен!", show_alert=True)
+        await callback.answer("✅ Алерт одобрен! Начинаем рассылку...", show_alert=True)
         
-        # DELETE MODERATION MESSAGE after processing (FIX #10)
+        # DELETE MODERATION MESSAGE IMMEDIATELY (not after 10 seconds)
         admin_bot = get_admin_bot()
         if admin_bot:
+            from utils.message_helpers import delete_message_immediately
             asyncio.create_task(
-                delete_message_later(admin_bot, callback.message.chat.id, callback.message.message_id, 10)
+                delete_message_immediately(admin_bot, callback.message.chat.id, callback.message.message_id)
             )
         
-        # Send confirmation and ask if want to broadcast now
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Разослать сейчас", callback_data=f"admin_alert_broadcast_{alert_id}")],
-            [InlineKeyboardButton(text="🔙 К списку", callback_data="admin_alert_menu")]
-        ])
+        # AUTOMATICALLY TRIGGER BROADCAST (FIX #5 - broadcast must work!)
+        # Start broadcast in background immediately after approval
+        asyncio.create_task(_broadcast_alert_task(alert_id, callback.message.chat.id))
         
-        msg = await callback.message.answer(
-            f"✅ Алерт #{alert_id} одобрен!\n\n"
-            "Хотите разослать его сейчас?",
-            reply_markup=keyboard
-        )
-        
-        # Auto-delete confirmation after 30 sec
-        if admin_bot:
-            asyncio.create_task(delete_message_later(admin_bot, callback.message.chat.id, msg.message_id, 30))
-        
-        logger.info(f"[admin_alert_approve] ✅ Админ {admin_id} одобрил алерт #{alert_id}")
+        logger.info(f"[admin_alert_approve] ✅ Админ {admin_id} одобрил алерт #{alert_id} - начата рассылка")
         
     except Exception as e:
         logger.error(f"[admin_alert_approve] ❌ Ошибка: {str(e)}", exc_info=True)
         await callback.answer("❌ Ошибка одобрения алерта", show_alert=True)
+
+
+async def _broadcast_alert_task(alert_id: int, admin_chat_id: int):
+    """Background task to broadcast alert to users"""
+    try:
+        user_bot = get_user_bot()
+        admin_bot = get_admin_bot()
+        
+        if not user_bot:
+            logger.error(f"[_broadcast_alert_task] ❌ User Bot не доступен!")
+            return
+        
+        async with AsyncSessionLocal() as session:
+            alert = await AlertService.get_alert(session, alert_id)
+            
+            if not alert or not alert.is_approved:
+                logger.error(f"[_broadcast_alert_task] ❌ Алерт #{alert_id} не найден или не одобрен")
+                return
+            
+            # Get target users
+            target_users = await AlertService.get_broadcast_targets(session, alert)
+            
+            if not target_users:
+                logger.warning(f"[_broadcast_alert_task] ⚠️ Нет получателей для алерта #{alert_id}")
+                if admin_bot:
+                    await admin_bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"⚠️ Алерт #{alert_id}: Нет получателей для рассылки"
+                    )
+                return
+            
+            logger.info(f"[_broadcast_alert_task] 📢 Начинаем рассылку алерта #{alert_id} для {len(target_users)} пользователей")
+            
+            # Send to all target users
+            sent_count = 0
+            failed_count = 0
+            
+            for user in target_users:
+                try:
+                    # Build alert message based on user language
+                    message_text = _format_alert_message(alert, user.language)
+                    
+                    # Send photo if available
+                    if alert.photo_file_id:
+                        await user_bot.send_photo(
+                            chat_id=user.telegram_id,
+                            photo=alert.photo_file_id,
+                            caption=message_text,
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await user_bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=message_text,
+                            parse_mode="HTML"
+                        )
+                    
+                    # Send location if available
+                    if alert.latitude and alert.longitude:
+                        await user_bot.send_location(
+                            chat_id=user.telegram_id,
+                            latitude=alert.latitude,
+                            longitude=alert.longitude
+                        )
+                    
+                    sent_count += 1
+                    logger.debug(f"[_broadcast_alert_task] ✅ Отправлено пользователю {user.telegram_id}")
+                    
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"[_broadcast_alert_task] ❌ Ошибка отправки пользователю {user.telegram_id}: {str(e)}")
+            
+            # Mark as broadcast
+            await AlertService.mark_broadcast_sent(session, alert_id, sent_count)
+            
+            # Notify admin about results
+            if admin_bot:
+                result_text = (
+                    f"✅ РАССЫЛКА ЗАВЕРШЕНА!\n\n"
+                    f"Алерт #{alert_id}\n"
+                    f"📊 Статистика:\n"
+                    f"✅ Отправлено: {sent_count}\n"
+                    f"❌ Ошибок: {failed_count}"
+                )
+                await admin_bot.send_message(
+                    chat_id=admin_chat_id,
+                    text=result_text
+                )
+            
+            logger.info(f"[_broadcast_alert_task] ✅ Рассылка алерта #{alert_id} завершена: отправлено={sent_count}, ошибок={failed_count}")
+            
+    except Exception as e:
+        logger.error(f"[_broadcast_alert_task] ❌ Критическая ошибка рассылки: {str(e)}", exc_info=True)
+
+
+def _format_alert_message(alert: Alert, language: str) -> str:
+    """Format alert message for broadcast"""
+    # Alert type emojis
+    type_emojis = {
+        AlertType.SHURTA: "🚨",
+        AlertType.MISSING_PERSON: "👤",
+        AlertType.LOST_ITEM: "📦",
+        AlertType.SCAM_WARNING: "⚠️",
+        AlertType.MEDICAL_EMERGENCY: "🏥",
+        AlertType.ACCOMMODATION_NEEDED: "🏠",
+        AlertType.RIDE_SHARING: "🚗",
+        AlertType.JOB_POSTING: "💼",
+        AlertType.LOST_DOCUMENT: "📄",
+        AlertType.EVENT_ANNOUNCEMENT: "🎉",
+    }
+    
+    emoji = type_emojis.get(alert.alert_type, "📝")
+    
+    # Alert type names
+    type_names_ru = {
+        AlertType.SHURTA: "ПОЛИЦИЯ",
+        AlertType.MISSING_PERSON: "ПРОПАЛ ЧЕЛОВЕК",
+        AlertType.LOST_ITEM: "ПОТЕРЯ ВЕЩИ",
+        AlertType.SCAM_WARNING: "МОШЕННИЧЕСТВО",
+        AlertType.MEDICAL_EMERGENCY: "МЕДПОМОЩЬ",
+        AlertType.ACCOMMODATION_NEEDED: "НУЖНО ЖИЛЬЕ",
+        AlertType.RIDE_SHARING: "ПОПУТЧИКИ",
+        AlertType.JOB_POSTING: "ВАКАНСИЯ",
+        AlertType.LOST_DOCUMENT: "ПОТЕРЯ ДОКУМЕНТА",
+        AlertType.EVENT_ANNOUNCEMENT: "МЕРОПРИЯТИЕ",
+    }
+    
+    type_names_uz = {
+        AlertType.SHURTA: "POLITSIYA",
+        AlertType.MISSING_PERSON: "ODAM YO'QOLDI",
+        AlertType.LOST_ITEM: "NARSA YO'QOLDI",
+        AlertType.SCAM_WARNING: "FIRIBGARLIK",
+        AlertType.MEDICAL_EMERGENCY: "TIBBIY YORDAM",
+        AlertType.ACCOMMODATION_NEEDED: "UY-JOY KERAK",
+        AlertType.RIDE_SHARING: "YO'LOVCHI QIDIRISH",
+        AlertType.JOB_POSTING: "ISH TAKLIFI",
+        AlertType.LOST_DOCUMENT: "HUJJAT YO'QOLDI",
+        AlertType.EVENT_ANNOUNCEMENT: "TADBIR E'LONI",
+    }
+    
+    if language == "UZ":
+        type_name = type_names_uz.get(alert.alert_type, alert.alert_type.value)
+        text = f"{emoji} <b>{type_name}</b>\n\n"
+        
+        if alert.title:
+            text += f"<b>{alert.title}</b>\n\n"
+        
+        text += f"{alert.description}\n"
+        
+        if alert.phone:
+            text += f"\n📞 <b>Aloqa:</b> {alert.phone}"
+        
+        if alert.address_text:
+            text += f"\n📍 <b>Manzil:</b> {alert.address_text}"
+        
+        text += f"\n\n🕒 {alert.created_at.strftime('%d.%m.%Y %H:%M')}"
+    else:  # RU
+        type_name = type_names_ru.get(alert.alert_type, alert.alert_type.value)
+        text = f"{emoji} <b>{type_name}</b>\n\n"
+        
+        if alert.title:
+            text += f"<b>{alert.title}</b>\n\n"
+        
+        text += f"{alert.description}\n"
+        
+        if alert.phone:
+            text += f"\n📞 <b>Контакт:</b> {alert.phone}"
+        
+        if alert.address_text:
+            text += f"\n📍 <b>Место:</b> {alert.address_text}"
+        
+        text += f"\n\n🕒 {alert.created_at.strftime('%d.%m.%Y %H:%M')}"
+    
+    return text
 
 
 @router.callback_query(F.data.startswith("admin_alert_reject_"))
@@ -436,73 +602,19 @@ async def reject_alert_confirm(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("admin_alert_broadcast_"))
 async def broadcast_alert(callback: CallbackQuery, state: FSMContext):
-    """Broadcast approved alert to target users"""
+    """Manually trigger broadcast for already approved alert"""
     try:
         alert_id = int(callback.data.split("_")[-1])
         
         await callback.message.edit_text(
-            "📢 Рассылка алерта...\n\n"
-            "Пожалуйста, подождите..."
+            "📢 Рассылка алерта запущена...\n\n"
+            "Пожалуйста, подождите отчёт о результатах"
         )
         
-        async with AsyncSessionLocal() as session:
-            alert = await AlertService.get_alert(session, alert_id)
-            
-            if not alert:
-                await callback.answer("❌ Алерт не найден", show_alert=True)
-                return
-            
-            if not alert.is_approved:
-                await callback.answer("❌ Алерт не одобрен", show_alert=True)
-                return
-            
-            # Get target users
-            target_users = await AlertService.get_broadcast_targets(session, alert)
-            
-            if not target_users:
-                await callback.answer("⚠️ Нет получателей для рассылки", show_alert=True)
-                return
-            
-            # Send to all target users (via user bot)
-            # TODO: Implement actual broadcast via user bot
-            sent_count = 0
-            failed_count = 0
-            
-            # For now, just simulate and mark as sent
-            sent_count = len(target_users)
-            
-            # Mark as broadcast
-            await AlertService.mark_broadcast_sent(session, alert_id, sent_count)
-            
-            # Log admin action
-            from services.user_service import UserService
-            admin = await UserService.get_user(session, callback.from_user.id)
-            if admin:
-                await AdminLogService.log_action(
-                    session,
-                    admin_id=admin.id,
-                    action="BROADCAST_ALERT",
-                    entity_type="Alert",
-                    entity_id=alert_id,
-                    details={
-                        "alert_type": alert.alert_type.value,
-                        "sent_count": sent_count,
-                        "failed_count": failed_count
-                    }
-                )
+        # Launch broadcast task (same as automatic flow)
+        asyncio.create_task(_broadcast_alert_task(alert_id, callback.message.chat.id))
         
-        await callback.message.edit_text(
-            f"✅ РАССЫЛКА ЗАВЕРШЕНА!\n\n"
-            f"📊 Статистика:\n"
-            f"✅ Отправлено: {sent_count}\n"
-            f"❌ Ошибок: {failed_count}\n\n"
-            f"Алерт #{alert_id} разослан!",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 К меню алертов", callback_data="admin_alert_menu")]
-            ])
-        )
-        
-        logger.info(f"[admin_alert_broadcast] ✅ Алерт #{alert_id} разослан {sent_count} пользователям")
+        await callback.answer("📢 Рассылка запускается", show_alert=True)
         
     except Exception as e:
         logger.error(f"[admin_alert_broadcast] ❌ Ошибка: {str(e)}", exc_info=True)

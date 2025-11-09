@@ -61,6 +61,7 @@ async def export_alerts_menu(callback: CallbackQuery, state: FSMContext):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📊 CSV", callback_data="admin_export_do_alerts_csv")],
             [InlineKeyboardButton(text="📄 JSON", callback_data="admin_export_do_alerts_json")],
+            [InlineKeyboardButton(text="📝 TXT", callback_data="admin_export_do_alerts_txt")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
         ])
         
@@ -166,6 +167,46 @@ async def do_export_alerts_json(callback: CallbackQuery, state: FSMContext):
         )
 
 
+@router.callback_query(F.data == "admin_export_do_alerts_txt")
+async def do_export_alerts_txt(callback: CallbackQuery, state: FSMContext):
+    """Export alerts to TXT"""
+    try:
+        await callback.message.edit_text(
+            "⏳ Экспорт алертов в TXT...\n\n"
+            "Пожалуйста, подождите..."
+        )
+        
+        async with AsyncSessionLocal() as session:
+            filepath = await ExportService.export_alerts_txt(session)
+        
+        file = FSInputFile(filepath)
+        await callback.message.answer_document(
+            document=file,
+            caption="✅ Экспорт алертов завершен!\n\n📝 TXT файл готов."
+        )
+        
+        ExportService.cleanup_export_file(filepath)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К меню экспорта", callback_data="admin_export_menu")]
+        ])
+        await callback.message.edit_text(
+            "✅ Файл отправлен!",
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"[export_alerts_txt] ✅ Админ {callback.from_user.id} экспортировал алерты в TXT")
+        
+    except Exception as e:
+        logger.error(f"[export_alerts_txt] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.message.edit_text(
+            "❌ Ошибка экспорта",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
+            ])
+        )
+
+
 @router.callback_query(F.data == "admin_export_users")
 async def export_users_menu(callback: CallbackQuery, state: FSMContext):
     """Choose format for users export"""
@@ -174,6 +215,7 @@ async def export_users_menu(callback: CallbackQuery, state: FSMContext):
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📊 CSV", callback_data="admin_export_do_users_csv")],
+            [InlineKeyboardButton(text="📝 TXT", callback_data="admin_export_do_users_txt")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
         ])
         
@@ -235,6 +277,46 @@ async def do_export_users_csv(callback: CallbackQuery, state: FSMContext):
         )
 
 
+@router.callback_query(F.data == "admin_export_do_users_txt")
+async def do_export_users_txt(callback: CallbackQuery, state: FSMContext):
+    """Export users to TXT"""
+    try:
+        await callback.message.edit_text(
+            "⏳ Экспорт пользователей в TXT...\n\n"
+            "Пожалуйста, подождите..."
+        )
+        
+        async with AsyncSessionLocal() as session:
+            filepath = await ExportService.export_users_txt(session)
+        
+        file = FSInputFile(filepath)
+        await callback.message.answer_document(
+            document=file,
+            caption="✅ Экспорт пользователей завершен!\n\n📝 TXT файл готов."
+        )
+        
+        ExportService.cleanup_export_file(filepath)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К меню экспорта", callback_data="admin_export_menu")]
+        ])
+        await callback.message.edit_text(
+            "✅ Файл отправлен!",
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"[export_users_txt] ✅ Админ {callback.from_user.id} экспортировал пользователей в TXT")
+        
+    except Exception as e:
+        logger.error(f"[export_users_txt] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.message.edit_text(
+            "❌ Ошибка экспорта",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
+            ])
+        )
+
+
 @router.callback_query(F.data == "admin_export_deliveries")
 async def export_deliveries_menu(callback: CallbackQuery, state: FSMContext):
     """Choose format for deliveries export"""
@@ -243,6 +325,7 @@ async def export_deliveries_menu(callback: CallbackQuery, state: FSMContext):
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📊 CSV", callback_data="admin_export_do_deliveries_csv")],
+            [InlineKeyboardButton(text="📝 TXT", callback_data="admin_export_do_deliveries_txt")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
         ])
         
@@ -296,6 +379,46 @@ async def do_export_deliveries_csv(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"[export_deliveries_csv] ❌ Ошибка: {str(e)}", exc_info=True)
+        await callback.message.edit_text(
+            "❌ Ошибка экспорта",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
+            ])
+        )
+
+
+@router.callback_query(F.data == "admin_export_do_deliveries_txt")
+async def do_export_deliveries_txt(callback: CallbackQuery, state: FSMContext):
+    """Export deliveries to TXT"""
+    try:
+        await callback.message.edit_text(
+            "⏳ Экспорт доставок в TXT...\n\n"
+            "Пожалуйста, подождите..."
+        )
+        
+        async with AsyncSessionLocal() as session:
+            filepath = await ExportService.export_deliveries_txt(session)
+        
+        file = FSInputFile(filepath)
+        await callback.message.answer_document(
+            document=file,
+            caption="✅ Экспорт доставок завершен!\n\n📝 TXT файл готов."
+        )
+        
+        ExportService.cleanup_export_file(filepath)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К меню экспорта", callback_data="admin_export_menu")]
+        ])
+        await callback.message.edit_text(
+            "✅ Файл отправлен!",
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"[export_deliveries_txt] ✅ Админ {callback.from_user.id} экспортировал доставки в TXT")
+        
+    except Exception as e:
+        logger.error(f"[export_deliveries_txt] ❌ Ошибка: {str(e)}", exc_info=True)
         await callback.message.edit_text(
             "❌ Ошибка экспорта",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[

@@ -175,9 +175,8 @@ def get_main_menu_keyboard(lang: str):
             )
         ])
     
-    # Add other menu buttons
+    # Add other menu buttons (Documents removed per ticket requirements)
     keyboard_rows.extend([
-        [KeyboardButton(text=t("menu_documents", lang))],
         [KeyboardButton(text=t("menu_delivery", lang))],
         [KeyboardButton(text=t("alert_menu_title", lang))],  # Alert creation
         [KeyboardButton(text=t("menu_admin_contact", lang))],
@@ -531,19 +530,26 @@ async def start_alert_creation(message: Message, state: FSMContext):
         if not user or user.is_banned:
             return
         
-        # Build type selection keyboard
+        # Build type selection keyboard - 2 COLUMNS layout, exclude COURIER_NEEDED
+        from utils.message_helpers import build_keyboard_2_columns
+        
         buttons = []
         for alert_type in AlertType:
+            # EXCLUDE COURIER_NEEDED from user UI (delivery is managed separately)
+            if alert_type == AlertType.COURIER_NEEDED:
+                continue
+            
             type_key = f"alert_type_{alert_type.value.lower()}"
             type_text = t(type_key, user.language)
-            buttons.append([InlineKeyboardButton(
+            buttons.append(InlineKeyboardButton(
                 text=type_text,
                 callback_data=f"alert_create_{alert_type.value}"
-            )])
+            ))
         
-        buttons.append([InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")])
+        # Build 2-column keyboard with back button
+        back_button = InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")
+        keyboard = build_keyboard_2_columns(buttons, back_button=back_button)
         
-        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
         await message.answer(
             t("alert_select_type", user.language),
             reply_markup=keyboard
@@ -655,7 +661,6 @@ async def process_alert_description(message: Message, state: FSMContext):
             AlertType.JOB_POSTING,
             AlertType.ACCOMMODATION_NEEDED,
             AlertType.RIDE_SHARING,
-            AlertType.COURIER_NEEDED,
             AlertType.LOST_DOCUMENT
         ]
         
