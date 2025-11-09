@@ -408,6 +408,7 @@ class WebAppCategory(Base):
     items = relationship(
         "WebAppCategoryItem",
         back_populates="category",
+        foreign_keys="WebAppCategoryItem.category_id",
         cascade="all, delete-orphan",
         lazy="selectin",
         order_by="WebAppCategoryItem.order_index"
