@@ -32,6 +32,11 @@ export class APIClient {
             }
         };
 
+        // Remove default JSON content type if sending FormData
+        if (config.body instanceof FormData && config.headers['Content-Type']) {
+            delete config.headers['Content-Type'];
+        }
+
         try {
             const response = await fetch(url, config);
 

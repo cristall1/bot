@@ -28,6 +28,7 @@ from webapp.auth import require_admin_user, get_db_session
 from webapp.routes.categories import (
     WebAppCategoryDetailOut,
     WebAppCategoryItemOut,
+    WebAppCategoryOut,
     WebAppFileOut,
     build_file_url,
     serialize_category,
@@ -381,6 +382,82 @@ async def delete_category(
         raise HTTPException(status_code=500, detail=f"Ошибка удаления категории: {str(e)}")
 
 
+class CategoryReorderRequest(BaseModel):
+    """Schema for reordering categories"""
+    category_ids: List[int] = Field(..., description="List of category IDs in desired order")
+
+
+@router.post("/categories/reorder", response_model=List[WebAppCategoryOut])
+async def reorder_categories(
+    data: CategoryReorderRequest,
+    user: User = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Переупорядочить категории (только администратор)
+    Reorder categories (admin only)
+    
+    Accepts array of category IDs in desired order. Each category will be assigned
+    an order_index based on its position in the array (0, 1, 2, ...).
+    """
+    try:
+        if not data.category_ids:
+            logger.warning("❌ Пустой список категорий для переупорядочивания")
+            raise HTTPException(status_code=400, detail="Список категорий для переупорядочивания не может быть пустым")
+        
+        if len(set(data.category_ids)) != len(data.category_ids):
+            logger.warning(f"❌ Найдены дубликаты в category_ids: {data.category_ids}")
+            raise HTTPException(status_code=400, detail="Список category_ids содержит дубликаты")
+        
+        # Verify all categories exist
+        result = await session.execute(
+            select(WebAppCategory).where(WebAppCategory.id.in_(data.category_ids))
+        )
+        existing_categories = result.scalars().all()
+        existing_ids = {cat.id for cat in existing_categories}
+        
+        invalid_ids = set(data.category_ids) - existing_ids
+        if invalid_ids:
+            logger.warning(f"❌ Категории {invalid_ids} не найдены")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Категории с ID {sorted(invalid_ids)} не найдены"
+            )
+        
+        # Update order_index for each category
+        for idx, category_id in enumerate(data.category_ids):
+            await WebAppContentService.update_category(
+                session=session,
+                category_id=category_id,
+                order_index=idx
+            )
+        
+        # Get updated categories list
+        categories = await WebAppContentService.list_categories(
+            session=session,
+            include_inactive=True
+        )
+        
+        result = [
+            serialize_category(
+                category,
+                include_items=False,
+                include_inactive_items=True
+            )
+            for category in categories
+        ]
+        
+        logger.info(f"✅ Администратор {user.telegram_id} переупорядочил {len(data.category_ids)} категорий")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Ошибка переупорядочивания категорий: {str(e)}", exc_info=True)
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка переупорядочивания категорий: {str(e)}")
+
+
 # Admin Item Endpoints
 
 @router.post("/category/{category_id}/items", response_model=WebAppCategoryItemOut)
@@ -475,6 +552,7 @@ async def create_item(
         
         response = WebAppCategoryItemOut(
             id=item.id,
+            category_id=item.category_id,
             type=item.type,
             text_content=item.text_content,
             rich_metadata=item.rich_metadata,
@@ -602,6 +680,7 @@ async def update_item(
         
         response = WebAppCategoryItemOut(
             id=updated_item.id,
+            category_id=updated_item.category_id,
             type=updated_item.type,
             text_content=updated_item.text_content,
             rich_metadata=updated_item.rich_metadata,

@@ -2,12 +2,14 @@ import { initializeTheme } from './theme.js';
 import { APIClient } from './api.js';
 import { NavigationController } from './navigation.js';
 import { ContentRenderer } from './renderer.js';
+import { AdminEditor } from './admin-editor.js';
 
 class WebAppController {
     constructor() {
         this.webApp = window.Telegram?.WebApp ?? null;
         this.config = this.loadConfig();
         this.api = new APIClient(this.config.apiBaseUrl);
+        this.adminEditor = null;
 
         this.storageKeys = {
             scrollPositions: 'webapp_scroll_positions',
@@ -98,6 +100,11 @@ class WebAppController {
         }
 
         await this.loadInitialData();
+        
+        // Initialize admin editor after loading initial data
+        if (!this.adminEditor) {
+            this.adminEditor = new AdminEditor(this.api, this);
+        }
     }
 
     async loadInitialData() {
@@ -142,6 +149,7 @@ class WebAppController {
         this.setLastCategoryId(null);
         this.navigation.setActiveCategory(null);
         this.navigation.resetBreadcrumbs();
+        this.adminEditor?.onCategoryLoaded(null);
 
         this.elements.categoryTitle.textContent = 'Категории';
         this.elements.categoryDescription.textContent = 'Выберите категорию для просмотра контента';
@@ -278,6 +286,8 @@ class WebAppController {
             if (!skipLoading) {
                 this.hideLoading();
             }
+            
+            this.adminEditor?.onCategoryLoaded(category);
         } catch (error) {
             console.error('Failed to load category:', error);
             this.showError('Не удалось загрузить категорию. Попробуйте снова.', error);
