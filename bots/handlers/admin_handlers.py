@@ -44,6 +44,7 @@ router = Router()
 def get_admin_main_menu():
     """Главное меню администратора (Admin main menu)"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔧 Управление главным меню", callback_data="admin_menu_manage")],
         [InlineKeyboardButton(text="📁 Управление категориями", callback_data="admin_category_menu")],
         [InlineKeyboardButton(text="🚨 Модерация алертов", callback_data="admin_alert_menu")],
         [InlineKeyboardButton(text="📚 Управление документами", callback_data="admin_doc_menu")],
