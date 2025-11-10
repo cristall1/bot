@@ -19,12 +19,14 @@ class AdminBot:
         from bots.handlers import admin_category_handlers
         from bots.handlers import admin_alert_handlers
         from bots.handlers import admin_export_handlers
+        from bots.handlers import admin_menu_handlers
         
         # Register all routers
         self.dp.include_router(admin_handlers.router)
         self.dp.include_router(admin_category_handlers.router)
         self.dp.include_router(admin_alert_handlers.router)
         self.dp.include_router(admin_export_handlers.router)
+        self.dp.include_router(admin_menu_handlers.router)
         
         await self.dp.start_polling(self.bot)
     

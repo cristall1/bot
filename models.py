@@ -553,3 +553,66 @@ class WebAppCategoryItem(Base):
         foreign_keys=[target_category_id],
         lazy="selectin"
     )
+
+
+class MenuItem(Base):
+    """Menu items for User Bot main menu"""
+    __tablename__ = "menu_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    description_ru = Column(Text, nullable=True)
+    description_uz = Column(Text, nullable=True)
+    icon = Column(String(50), nullable=True)  # Emoji icon
+    is_active = Column(Boolean, default=True, index=True)
+    order_index = Column(Integer, default=0, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    content = relationship("MenuContent", back_populates="menu_item", cascade="all, delete-orphan", order_by="MenuContent.order_index")
+    buttons = relationship("MenuButton", back_populates="menu_item", cascade="all, delete-orphan", order_by="MenuButton.order_index")
+
+
+class MenuContent(Base):
+    """Content items attached to menu items"""
+    __tablename__ = "menu_content"
+
+    id = Column(Integer, primary_key=True, index=True)
+    menu_item_id = Column(Integer, ForeignKey("menu_items.id"), nullable=False, index=True)
+    content_type = Column(String(20), nullable=False)  # TEXT, PHOTO, PDF, AUDIO, LOCATION
+    text_ru = Column(Text, nullable=True)
+    text_uz = Column(Text, nullable=True)
+    file_id = Column(String(500), nullable=True)  # Telegram file_id for photo, pdf, audio
+    caption_ru = Column(Text, nullable=True)  # Caption for photo/file
+    caption_uz = Column(Text, nullable=True)  # Caption for photo/file
+    location_type = Column(String(20), nullable=True)  # ADDRESS, GEO, MAPS
+    address_text = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_name = Column(String(255), nullable=True)
+    maps_url = Column(String(500), nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    menu_item = relationship("MenuItem", back_populates="content")
+
+
+class MenuButton(Base):
+    """Buttons attached to menu items"""
+    __tablename__ = "menu_buttons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    menu_item_id = Column(Integer, ForeignKey("menu_items.id"), nullable=False, index=True)
+    button_type = Column(String(20), default="INLINE")  # INLINE or KEYBOARD
+    text_ru = Column(String(255), nullable=False)
+    text_uz = Column(String(255), nullable=False)
+    action_type = Column(String(20), nullable=False)  # OPEN_URL, SEND_TEXT, SEND_PHOTO, SEND_PDF, SEND_AUDIO, SEND_LOCATION
+    action_data = Column(JSON, nullable=True)  # Flexible data: {"url": "...", "file_id": "...", "text_ru": "...", "text_uz": "...", etc}
+    order_index = Column(Integer, default=0, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    menu_item = relationship("MenuItem", back_populates="buttons")
