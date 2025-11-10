@@ -284,3 +284,6 @@ class AdminStates(StatesGroup):
     menu_create_name_ru = State()
     menu_create_name_uz = State()
     menu_create_icon = State()
+    adding_filter_name_ru = State()
+    adding_filter_name_uz = State()
+    adding_filter_options = State()

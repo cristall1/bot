@@ -16,7 +16,9 @@ class UserBot:
     async def start(self):
         """Start the user bot"""
         from bots.handlers.user_handlers import register_user_handlers
+        from bots.handlers import user_navigation_handlers
         register_user_handlers(self.dp)
+        self.dp.include_router(user_navigation_handlers.router)
         
         await self.dp.start_polling(self.bot)
     

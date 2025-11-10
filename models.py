@@ -360,63 +360,123 @@ class ButtonClick(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    button_name = Column(String(255), nullable=False)  # Текст кнопки или идентификатор
-    category = Column(String(100), nullable=True)  # Категория если применимо
+    button_name = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
     user = relationship("User", back_populates="button_clicks")
 
 
-class Category(Base):
-    """Категории для админ-панели (Categories for admin panel)"""
-    __tablename__ = "categories"
+class MainMenu(Base):
+    """Главное меню (TALIM, DOSTAVKA)"""
+    __tablename__ = "main_menu"
 
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String(100), unique=True, nullable=False)  # talim, dostavka, yoqolgan, shurta, etc.
     name_ru = Column(String(255), nullable=False)
     name_uz = Column(String(255), nullable=False)
-    icon = Column(String(50), nullable=True)  # Emoji icon
-    is_active = Column(Boolean, default=True)  # on/off toggle
-    order_index = Column(Integer, default=0)
-    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # For nested categories
-    content_type = Column(String(20), default="TEXT")  # TEXT, PHOTO, AUDIO, PDF, LINK, LOCATION, BUTTON_COLLECTION
-    text_content_ru = Column(Text, nullable=True)
-    text_content_uz = Column(Text, nullable=True)
-    photo_file_id = Column(String(500), nullable=True)
-    audio_file_id = Column(String(500), nullable=True)
-    pdf_file_id = Column(String(500), nullable=True)
-    link_url = Column(String(500), nullable=True)
-    location_type = Column(String(20), nullable=True)  # ADDRESS, GEO, MAPS
-    location_address = Column(String(500), nullable=True)
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    geo_name = Column(String(255), nullable=True)
-    maps_url = Column(String(500), nullable=True)
-    button_type = Column(String(20), nullable=True)  # INLINE, KEYBOARD, NONE
+    icon = Column(String(50), nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
-    parent = relationship("Category", remote_side=[id], backref="children")
+    categories = relationship("Category", back_populates="main_menu", cascade="all, delete-orphan")
+    filters = relationship("MenuFilter", back_populates="main_menu", cascade="all, delete-orphan")
+
+
+class MenuFilter(Base):
+    """Фильтры меню (Гражданство, Вид документа)"""
+    __tablename__ = "menu_filters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    main_menu_id = Column(Integer, ForeignKey("main_menu.id"), nullable=False, index=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    filter_type = Column(String(20), default="buttons")
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    main_menu = relationship("MainMenu", back_populates="filters")
+    options = relationship("MenuFilterOption", back_populates="filter", cascade="all, delete-orphan")
+
+
+class MenuFilterOption(Base):
+    """Опции фильтра (Узбекистан, Россия, Казахстан)"""
+    __tablename__ = "menu_filter_options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filter_id = Column(Integer, ForeignKey("menu_filters.id"), nullable=False, index=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    icon = Column(String(50), nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    filter = relationship("MenuFilter", back_populates="options")
+    categories = relationship("Category", back_populates="filter_option")
+
+
+class Category(Base):
+    """Категории с иерархией"""
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    main_menu_id = Column(Integer, ForeignKey("main_menu.id"), nullable=False, index=True)
+    parent_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    filter_option_id = Column(Integer, ForeignKey("menu_filter_options.id"), nullable=True, index=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    icon = Column(String(50), nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    main_menu = relationship("MainMenu", back_populates="categories")
+    parent = relationship("Category", remote_side=[id], backref="subcategories")
+    filter_option = relationship("MenuFilterOption", back_populates="categories")
+    content = relationship("CategoryContent", back_populates="category", cascade="all, delete-orphan")
     buttons = relationship("CategoryButton", back_populates="category", cascade="all, delete-orphan")
 
 
+class CategoryContent(Base):
+    """Контент категории"""
+    __tablename__ = "category_content"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
+    content_type = Column(String(20), nullable=False)  # text|photo|pdf|audio|location
+    text_ru = Column(Text, nullable=True)
+    text_uz = Column(Text, nullable=True)
+    file_id = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    location_title_ru = Column(String(255), nullable=True)
+    location_title_uz = Column(String(255), nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    category = relationship("Category", back_populates="content")
+
+
 class CategoryButton(Base):
-    """Кнопки для категорий (Buttons for categories)"""
+    """Кнопки категории"""
     __tablename__ = "category_buttons"
 
     id = Column(Integer, primary_key=True, index=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     text_ru = Column(String(255), nullable=False)
     text_uz = Column(String(255), nullable=False)
-    button_type = Column(String(20), default="LINK")  # LINK, CALLBACK, GEO
-    button_value = Column(String(500), nullable=False)  # URL, callback_data, coordinates
-    order_index = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True)
+    button_type = Column(String(20), default="url")  # url|next_category
+    action_data = Column(JSON, nullable=True)
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
     category = relationship("Category", back_populates="buttons")
 
 

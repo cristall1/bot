@@ -16,11 +16,12 @@ class CategoryService:
     @staticmethod
     async def create_category(
         session: AsyncSession,
-        key: str,
+        main_menu_id: int,
         name_ru: str,
         name_uz: str,
         icon: str = None,
-        parent_id: int = None,
+        parent_category_id: int = None,
+        filter_option_id: int = None,
         **kwargs
     ) -> Category:
         """
@@ -28,14 +29,15 @@ class CategoryService:
         Create new category
         """
         try:
-            logger.info(f"[CategoryService] Создание категории: {key}")
+            logger.info(f"[CategoryService] Создание категории: {name_ru}")
             
             category = Category(
-                key=key,
+                main_menu_id=main_menu_id,
                 name_ru=name_ru,
                 name_uz=name_uz,
                 icon=icon,
-                parent_id=parent_id,
+                parent_category_id=parent_category_id,
+                filter_option_id=filter_option_id,
                 **kwargs
             )
             
@@ -78,23 +80,32 @@ class CategoryService:
             raise
     
     @staticmethod
-    async def get_category_by_key(session: AsyncSession, key: str) -> Optional[Category]:
+    async def get_categories_by_menu(session: AsyncSession, main_menu_id: int, filter_option_id: int = None, parent_category_id: int = None, active_only: bool = True) -> List[Category]:
         """
-        Получить категорию по ключу
-        Get category by key
+        Получить категории для меню
+        Get categories for menu
         """
         try:
-            result = await session.execute(
-                select(Category)
-                .options(
-                    selectinload(Category.children),
-                    selectinload(Category.buttons)
-                )
-                .where(Category.key == key)
-            )
-            return result.scalar_one_or_none()
+            query = select(Category).options(
+                selectinload(Category.subcategories),
+                selectinload(Category.content),
+                selectinload(Category.buttons)
+            ).where(Category.main_menu_id == main_menu_id)
+            
+            if filter_option_id:
+                query = query.where(Category.filter_option_id == filter_option_id)
+            if parent_category_id:
+                query = query.where(Category.parent_category_id == parent_category_id)
+            else:
+                query = query.where(Category.parent_category_id == None)
+            if active_only:
+                query = query.where(Category.is_active == True)
+            
+            query = query.order_by(Category.order_index, Category.id)
+            result = await session.execute(query)
+            return list(result.scalars().unique().all())
         except Exception as e:
-            logger.error(f"[CategoryService] ❌ Ошибка получения категории по ключу: {str(e)}", exc_info=True)
+            logger.error(f"[CategoryService] ❌ Ошибка получения категорий: {str(e)}", exc_info=True)
             raise
     
     @staticmethod
@@ -137,9 +148,9 @@ class CategoryService:
         """
         try:
             query = select(Category).options(
-                selectinload(Category.children),
+                selectinload(Category.subcategories),
                 selectinload(Category.buttons)
-            ).where(Category.parent_id == None)
+            ).where(Category.parent_category_id == None)
             
             if active_only:
                 query = query.where(Category.is_active == True)
@@ -167,9 +178,9 @@ class CategoryService:
         """
         try:
             query = select(Category).options(
-                selectinload(Category.children),
+                selectinload(Category.subcategories),
                 selectinload(Category.buttons)
-            ).where(Category.parent_id == parent_id)
+            ).where(Category.parent_category_id == parent_id)
             
             if active_only:
                 query = query.where(Category.is_active == True)
