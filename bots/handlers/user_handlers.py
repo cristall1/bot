@@ -23,7 +23,7 @@ from services.alert_service import AlertService
 from services.user_message_service import UserMessageService
 from services.statistics_service import StatisticsService
 from services.geolocation_service import GeolocationService
-from models import AlertType
+from models import AlertType, User
 from utils.logger import logger
 from utils.message_helpers import send_menu_auto_delete, delete_message_later
 from config import settings
@@ -159,35 +159,50 @@ def get_language_keyboard():
     return keyboard
 
 
-def get_main_menu_keyboard(lang: str):
-    """Get main menu keyboard with WebApp button"""
-    webapp_url = settings.webapp_url or settings.webapp_public_url
+async def get_main_menu_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Get main menu INLINE keyboard from database (ALWAYS FRESH DATA)"""
+    from services.main_menu_service import MainMenuService
     
-    # Build keyboard rows
-    keyboard_rows = []
-    
-    # Only add WebApp button if URL is HTTPS (Telegram requirement)
-    if webapp_url and webapp_url.startswith("https://"):
-        keyboard_rows.append([
-            KeyboardButton(
-                text=t("menu_webapp", lang),
-                web_app=WebAppInfo(url=webapp_url)
-            )
-        ])
-    
-    # Add other menu buttons (Documents removed per ticket requirements)
-    keyboard_rows.extend([
-        [KeyboardButton(text=t("menu_delivery", lang))],
-        [KeyboardButton(text=t("alert_menu_title", lang))],  # Alert creation
-        [KeyboardButton(text=t("menu_admin_contact", lang))],
-        [KeyboardButton(text=t("menu_settings", lang))]
-    ])
-    
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=keyboard_rows,
-        resize_keyboard=True
-    )
-    return keyboard
+    async with AsyncSessionLocal() as session:
+        buttons = await MainMenuService.get_active_buttons(session)
+        
+        # Build inline keyboard
+        keyboard_buttons = []
+        
+        # WebApp button first if HTTPS
+        webapp_url = settings.webapp_url or settings.webapp_public_url
+        if webapp_url and webapp_url.startswith("https://"):
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=t("menu_webapp", lang),
+                    web_app=WebAppInfo(url=webapp_url)
+                )
+            ])
+        
+        # Add database buttons
+        for btn in buttons:
+            btn_text = f"{btn.icon} {btn.name_ru}" if lang == "RU" else f"{btn.icon} {btn.name_uz}"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=btn_text,
+                    callback_data=btn.callback_data
+                )
+            ])
+        
+        # Fallback defaults if DB empty
+        if not buttons:
+            default_buttons = [
+                ("🚚", t("menu_delivery", lang), "menu_delivery"),
+                ("🚨", t("alert_menu_title", lang), "menu_alert"),
+                ("📞", t("menu_admin_contact", lang), "menu_message_admin"),
+                ("⚙️", t("menu_settings", lang), "menu_settings"),
+            ]
+            for icon, text_label, callback in default_buttons:
+                keyboard_buttons.append([
+                    InlineKeyboardButton(text=f"{icon} {text_label}", callback_data=callback)
+                ])
+        
+        return InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
 
 def get_back_keyboard(lang: str):
@@ -222,7 +237,7 @@ def validate_google_maps_url(url: str) -> bool:
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    """Handle /start command"""
+    """Handle /start command - NOW WITH INLINE KEYBOARD"""
     async with AsyncSessionLocal() as session:
         user = await UserService.get_user(session, message.from_user.id)
         
@@ -242,9 +257,11 @@ async def cmd_start(message: Message, state: FSMContext):
             # Ensure preferences are present (handles legacy users)
             await AlertService.ensure_user_alert_preferences(session, user.id)
             
+            # SHOW INLINE KEYBOARD MENU
+            menu_keyboard = await get_main_menu_inline_keyboard(user.language)
             await message.answer(
                 t("main_menu", user.language),
-                reply_markup=get_main_menu_keyboard(user.language)
+                reply_markup=menu_keyboard
             )
             
             await StatisticsService.track_activity(
@@ -268,9 +285,10 @@ async def cmd_webapp(message: Message):
             return
         
         webapp_text = f"{t('webapp_title', lang)}\n\n{t('webapp_description', lang)}"
+        menu_keyboard = await get_main_menu_inline_keyboard(lang)
         await message.answer(
             webapp_text,
-            reply_markup=get_main_menu_keyboard(lang)
+            reply_markup=menu_keyboard
         )
         
         if user:
@@ -285,7 +303,7 @@ async def cmd_webapp(message: Message):
 
 @router.callback_query(F.data.startswith("lang_"))
 async def process_language_selection(callback: CallbackQuery, state: FSMContext):
-    """Process language selection"""
+    """Process language selection WITH ONBOARDING"""
     lang = callback.data.split("_")[1]
     
     async with AsyncSessionLocal() as session:
@@ -297,14 +315,66 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
             language=lang
         )
         
-        # Ensure user has alert preferences with defaults
+        # Ensure user has alert preferences with ALL ENABLED BY DEFAULT
         await AlertService.ensure_user_alert_preferences(session, user.id)
         
-        await callback.message.edit_text(t("language_selected", lang))
-        await callback.message.answer(
-            t("main_menu", lang),
-            reply_markup=get_main_menu_keyboard(lang)
-        )
+        # SHOW ONBOARDING MESSAGE
+        onboarding_text_ru = """
+✅ Язык выбран!
+
+═══════════════════════════════════════
+🔔 ОЗНАКОМЛЕНИЕ С БОТОМ
+═══════════════════════════════════════
+
+По умолчанию ВЫ ПОЛУЧАЕТЕ уведомления о:
+
+🚨 Полиции (SHURTA)
+👤 Пропавших людях
+📦 Потерянных вещах
+⚠️ Предупреждениях о мошенничестве
+🏥 Медицинской помощи
+🏠 Жилье
+🚗 Совместных поездках
+💼 Предложениях работы
+📄 Потерянных документах
+🎉 Событиях
+
+Вы можете изменить настройки в любое время:
+[⚙️ Настройки] → [🔔 Уведомления]
+"""
+        
+        onboarding_text_uz = """
+✅ Til tanlandi!
+
+═══════════════════════════════════════
+🔔 BOT HAQIDA MA'LUMOT
+═══════════════════════════════════════
+
+Standart bo'yicha SIZ BILDIRISHNOMALAR olasiz:
+
+🚨 Politsiya (SHURTA)
+👤 Yo'qolgan odamlar
+📦 Yo'qolgan narsalar
+⚠️ Firibgarlik haqida ogohlantirishlar
+🏥 Tibbiy yordam
+🏠 Uy-joy
+🚗 Birgalikda sayohat
+💼 Ish takliflari
+📄 Yo'qolgan hujjatlar
+🎉 Tadbirlar
+
+Sozlamalarni istalgan vaqtda o'zgartirishingiz mumkin:
+[⚙️ Sozlamalar] → [🔔 Bildirishnomalar]
+"""
+        
+        onboarding_text = onboarding_text_ru if lang == "RU" else onboarding_text_uz
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="👍 Понятно" if lang == "RU" else "👍 Tushunarli", callback_data="onboarding_understood")],
+            [InlineKeyboardButton(text="⚙️ Настроить сейчас" if lang == "RU" else "⚙️ Hozir sozlash", callback_data="menu_settings")]
+        ])
+        
+        await callback.message.edit_text(onboarding_text, reply_markup=keyboard)
         
         await StatisticsService.track_activity(
             session,
@@ -316,6 +386,129 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
     
     await state.clear()
     await callback.answer()
+
+
+@router.callback_query(F.data == "onboarding_understood")
+async def onboarding_complete(callback: CallbackQuery):
+    """Complete onboarding and show main menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        menu_keyboard = await get_main_menu_inline_keyboard(user.language)
+        await callback.message.edit_text(
+            t("main_menu", user.language),
+            reply_markup=menu_keyboard
+        )
+        logger.info(f"[onboarding] ✅ Пользователь {user.id} завершил онбординг")
+    
+    await callback.answer()
+
+
+# ==============================================================================
+# MAIN MENU INLINE KEYBOARD HANDLERS
+# ==============================================================================
+
+@router.callback_query(F.data == "back_main")
+async def back_to_main_menu(callback: CallbackQuery):
+    """Return to main menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        menu_keyboard = await get_main_menu_inline_keyboard(user.language)
+        await callback.message.edit_text(
+            t("main_menu", user.language),
+            reply_markup=menu_keyboard
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu_delivery")
+async def menu_delivery_handler(callback: CallbackQuery):
+    """Handle delivery menu button from main menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user or user.is_banned:
+            return
+        
+        # Check if user is courier
+        if user.is_courier:
+            # Show courier menu
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=t("delivery_menu_create", user.language), callback_data="delivery_create")],
+                [InlineKeyboardButton(text=t("delivery_menu_active", user.language), callback_data="delivery_active")],
+                [InlineKeyboardButton(text=t("delivery_menu_my_stats", user.language), callback_data="delivery_stats")],
+                [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+            ])
+        else:
+            # Show options: become courier or order delivery
+            text_ru = """
+🚚 ДОСТАВКА
+═════════════════
+
+Вы не зарегистрированы как курьер.
+
+Что вы хотите?
+"""
+            text_uz = """
+🚚 YETKAZIB BERISH
+═════════════════
+
+Siz kuryer sifatida ro'yxatdan o'tmagansiz.
+
+Nima qilmoqchisiz?
+"""
+            text = text_ru if user.language == "RU" else text_uz
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Стать курьером" if user.language == "RU" else "✅ Kuryer bo'lish", callback_data="become_courier")],
+                [InlineKeyboardButton(text="📦 Заказать доставку" if user.language == "RU" else "📦 Yetkazishni buyurtma qilish", callback_data="delivery_create")],
+                [InlineKeyboardButton(text=t("back", user.language), callback_data="back_main")]
+            ])
+            
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            await callback.answer()
+            return
+        
+        await callback.message.edit_text(
+            t("delivery_title", user.language),
+            reply_markup=keyboard
+        )
+        logger.info(f"[menu_delivery] ✅ Пользователь {user.id} открыл меню доставки")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu_alert")
+async def menu_alert_handler(callback: CallbackQuery, state: FSMContext):
+    """Handle alert creation button from main menu"""
+    # Redirect to alert type selection
+    await show_alert_type_selection(callback, state)
+
+
+@router.callback_query(F.data == "menu_message_admin")
+async def menu_message_admin_handler(callback: CallbackQuery, state: FSMContext):
+    """Handle message admin button from main menu"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user or user.is_banned:
+            return
+        
+        await callback.message.answer(
+            t("admin_contact_prompt", user.language),
+            reply_markup=get_back_keyboard(user.language)
+        )
+        await state.set_state(UserStates.admin_contact_message)
+        logger.info(f"[menu_message_admin] ✅ Пользователь {user.id} начал писать админу")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu_settings")
+async def menu_settings_handler(callback: CallbackQuery):
+    """Handle settings button from main menu"""
+    await show_settings_menu(callback)
 
 
 # ==============================================================================
@@ -977,6 +1170,217 @@ async def create_alert_from_state(message: Message, state: FSMContext, user, ses
     await state.clear()
 
 
+async def notify_couriers_about_delivery(delivery, session):
+    """
+    Notify all active couriers about new delivery order
+    Sends notification via User Bot with order details and action buttons
+    """
+    user_bot = get_user_bot()
+    if not user_bot:
+        logger.error("[notify_couriers] ❌ User Bot не доступен!")
+        return
+    
+    try:
+        # Get all active couriers
+        from sqlalchemy import select
+        from models import User
+        result = await session.execute(
+            select(User).where(
+                User.is_courier == True,
+                User.is_banned == False
+            )
+        )
+        couriers = result.scalars().all()
+        
+        if not couriers:
+            logger.info("[notify_couriers] ⚠️ Нет активных курьеров")
+            return
+        
+        # Format location info
+        location_text = ""
+        if delivery.address_text:
+            location_text = f"\n📍 Откуда: {delivery.address_text}"
+        elif delivery.latitude and delivery.longitude:
+            location_text = f"\n📍 Координаты: {delivery.latitude:.6f}, {delivery.longitude:.6f}"
+        elif delivery.geo_name:
+            location_text = f"\n📍 Место: {delivery.geo_name}"
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for courier in couriers:
+            try:
+                text_ru = f"""
+🚚 НОВЫЙ ЗАКАЗ #{delivery.id}
+
+Что доставить: {delivery.description}
+{location_text}
+
+📞 Телефон заказчика: {delivery.phone}
+⏰ Создан: {delivery.created_at.strftime('%d.%m.%Y %H:%M')}
+
+Хотите взять этот заказ?
+"""
+                
+                text_uz = f"""
+🚚 YANGI BUYURTMA #{delivery.id}
+
+Nima yetkazish: {delivery.description}
+{location_text}
+
+📞 Buyurtmachi telefoni: {delivery.phone}
+⏰ Yaratilgan: {delivery.created_at.strftime('%d.%m.%Y %H:%M')}
+
+Ushbu buyurtmani qabul qilmoqchimisiz?
+"""
+                
+                text = text_ru if courier.language == "RU" else text_uz
+                
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="✅ Взять заказ" if courier.language == "RU" else "✅ Qabul qilish",
+                            callback_data=f"accept_delivery_{delivery.id}"
+                        ),
+                        InlineKeyboardButton(
+                            text="❌ Отклонить" if courier.language == "RU" else "❌ Rad etish",
+                            callback_data=f"decline_delivery_{delivery.id}"
+                        )
+                    ]
+                ])
+                
+                # Send location first if available
+                if delivery.latitude and delivery.longitude:
+                    try:
+                        await user_bot.send_location(
+                            chat_id=courier.telegram_id,
+                            latitude=delivery.latitude,
+                            longitude=delivery.longitude
+                        )
+                    except Exception as loc_error:
+                        logger.error(f"[notify_couriers] ❌ Ошибка отправки локации курьеру {courier.telegram_id}: {str(loc_error)}")
+                
+                # Send notification
+                await user_bot.send_message(
+                    chat_id=courier.telegram_id,
+                    text=text,
+                    reply_markup=keyboard
+                )
+                
+                sent_count += 1
+                logger.info(f"[notify_couriers] ✅ Уведомление отправлено курьеру {courier.telegram_id}")
+                
+            except Exception as courier_error:
+                failed_count += 1
+                logger.error(f"[notify_couriers] ❌ Ошибка отправки курьеру {courier.telegram_id}: {str(courier_error)}")
+        
+        logger.info(f"[notify_couriers] ✅ Завершено: отправлено={sent_count}, ошибок={failed_count}")
+        
+    except Exception as e:
+        logger.error(f"[notify_couriers] ❌ Критическая ошибка: {str(e)}", exc_info=True)
+
+
+@router.callback_query(F.data.startswith("accept_delivery_"))
+async def courier_accept_delivery(callback: CallbackQuery):
+    """Courier accepts delivery order"""
+    delivery_id = int(callback.data.split("_")[-1])
+    
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user or not user.is_courier:
+            await callback.answer("❌ Только курьеры могут принимать заказы", show_alert=True)
+            return
+        
+        # Try to assign delivery
+        delivery = await DeliveryService.assign_courier(session, delivery_id, user.id)
+        
+        if delivery:
+            await callback.answer("✅ Заказ принят!" if user.language == "RU" else "✅ Buyurtma qabul qilindi!", show_alert=True)
+            
+            # Update message to show it's taken
+            taken_text_ru = f"""
+✅ ЗАКАЗ ПРИНЯТ
+
+Вы приняли заказ #{delivery.id}
+
+Что доставить: {delivery.description}
+📞 Телефон: {delivery.phone}
+
+Свяжитесь с заказчиком для уточнения деталей.
+"""
+            taken_text_uz = f"""
+✅ BUYURTMA QABUL QILINDI
+
+Siz #{delivery.id} buyurtmani qabul qildingiz
+
+Nima yetkazish: {delivery.description}
+📞 Telefon: {delivery.phone}
+
+Tafsilotlar uchun buyurtmachi bilan bog'laning.
+"""
+            
+            taken_text = taken_text_ru if user.language == "RU" else taken_text_uz
+            
+            try:
+                await callback.message.edit_text(taken_text)
+            except Exception:
+                pass
+            
+            # Notify customer
+            try:
+                user_bot = get_user_bot()
+                customer_text_ru = f"""
+✅ Ваш заказ #{delivery.id} принят курьером!
+
+Курьер свяжется с вами в ближайшее время.
+"""
+                customer_text_uz = f"""
+✅ Sizning #{delivery.id} buyurtmangiz kuryer tomonidan qabul qilindi!
+
+Kuryer tez orada siz bilan bog'lanadi.
+"""
+                
+                from sqlalchemy import select
+                from models import User
+                result = await session.execute(
+                    select(User).where(User.id == delivery.creator_id)
+                )
+                customer = result.scalar_one_or_none()
+                
+                if customer:
+                    customer_text = customer_text_ru if customer.language == "RU" else customer_text_uz
+                    await user_bot.send_message(
+                        chat_id=customer.telegram_id,
+                        text=customer_text
+                    )
+            except Exception as notify_error:
+                logger.error(f"[accept_delivery] ❌ Ошибка уведомления заказчика: {str(notify_error)}")
+            
+            logger.info(f"[accept_delivery] ✅ Курьер {user.id} принял доставку {delivery_id}")
+        else:
+            await callback.answer("❌ Заказ уже принят другим курьером" if user.language == "RU" else "❌ Buyurtma boshqa kuryer tomonidan qabul qilingan", show_alert=True)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("decline_delivery_"))
+async def courier_decline_delivery(callback: CallbackQuery):
+    """Courier declines delivery order"""
+    async with AsyncSessionLocal() as session:
+        user = await UserService.get_user(session, callback.from_user.id)
+        if not user:
+            return
+        
+        await callback.answer("Заказ отклонен" if user.language == "RU" else "Buyurtma rad etildi")
+        
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    
+    await callback.answer()
+
+
 # ==============================================================================
 # DELIVERY MENU (EXISTING FUNCTIONALITY WITH INLINE UPDATES)
 # ==============================================================================
@@ -1443,6 +1847,9 @@ async def process_delivery_phone(message: Message, state: FSMContext):
             )
             
             logger.info(f"[delivery_created] ✅ Пользователь {user.id} создал доставку {delivery.id}")
+            
+            # NOTIFY ALL ACTIVE COURIERS ABOUT NEW DELIVERY
+            asyncio.create_task(notify_couriers_about_delivery(delivery, session))
             
         except Exception as e:
             logger.error(f"[delivery_phone] ❌ Ошибка создания доставки: {str(e)}", exc_info=True)
