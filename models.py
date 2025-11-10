@@ -555,6 +555,21 @@ class WebAppCategoryItem(Base):
     )
 
 
+class MainMenuButton(Base):
+    """Main menu buttons for User Bot (Inline Keyboard Buttons)"""
+    __tablename__ = "main_menu_buttons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    icon = Column(String(50), nullable=True)  # Emoji icon
+    callback_data = Column(String(255), nullable=False)  # Callback data for button
+    order_index = Column(Integer, default=0, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class MenuItem(Base):
     """Menu items for User Bot main menu"""
     __tablename__ = "menu_items"

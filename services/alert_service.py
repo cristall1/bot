@@ -27,7 +27,8 @@ class AlertService:
             for alert_type in AlertType:
                 if alert_type in existing_types:
                     continue
-                is_enabled = alert_type == AlertType.SHURTA
+                # ALL ALERT TYPES ENABLED BY DEFAULT (except COURIER_NEEDED which is hidden)
+                is_enabled = alert_type != AlertType.COURIER_NEEDED
                 pref = UserAlertPreference(
                     user_id=user_id,
                     alert_type=alert_type,
